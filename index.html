@@ -175,21 +175,63 @@
   .status{padding:5px 12px;background:var(--panel2);border-top:1px solid var(--line);
     font-family:var(--mono);font-size:11px;color:var(--soft);display:flex;gap:16px;flex-wrap:wrap;}
 
-  /* mobile */
-  .mtoggle{display:none;}
-  @media(max-width:820px){
-    .side{position:absolute;right:0;top:0;bottom:0;z-index:20;transform:translateX(100%);
-      transition:transform .2s;box-shadow:-8px 0 30px rgba(0,0,0,.3);}
-    .side.open{transform:none;}
-    .mtoggle{display:inline-flex;}
-    .rail{width:54px;}
-    .tool{width:44px;height:44px;}
-  }
+  /* ===== MÓVIL (body.mobile — lo decide JS: táctil + ancho) ===== */
+  .mtoggle{display:none!important;}
+  .sheethandle{display:none;}
+  .fabs{display:none;}
+  html,body{overscroll-behavior:none;}
+  body.mobile .topbar{flex-wrap:nowrap;overflow:visible;gap:6px;padding:6px 8px;
+    padding-top:calc(6px + env(safe-area-inset-top));position:relative;z-index:45;}
+  body.mobile .brand{font-size:14px;min-width:0;}
+  body.mobile .brand small{display:none;}
+  body.mobile #grpUndo,body.mobile #grpSnap,body.mobile #saveTxt{display:none;}
+  body.mobile #grpAcciones>button{display:none;}
+  body.mobile #grpAcciones #projBtn{display:inline-flex;}
+  body.mobile #projName{max-width:84px;}
+  body.mobile #menuMovil{display:inline-flex;font-size:20px;padding:4px 13px;font-weight:800;}
+  body.mobile .save{margin-left:auto;}
+  /* controles 3D flotan sobre el lienzo */
+  body.mobile #v3dctrl{position:fixed;top:calc(54px + env(safe-area-inset-top));left:50%;
+    transform:translateX(-50%);z-index:38;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:4px;box-shadow:0 6px 20px rgba(0,0,0,.3);}
+  /* rail → dock horizontal inferior */
+  body.mobile .rail{position:fixed;left:0;right:0;bottom:calc(60px + env(safe-area-inset-bottom));
+    top:auto;width:100%;height:66px;flex-direction:row;overflow-x:auto;overflow-y:hidden;
+    border-right:0;border-top:1px solid var(--line);z-index:35;padding:6px 8px;gap:6px;}
+  body.mobile .rail::-webkit-scrollbar{display:none;}
+  body.mobile .tool{width:52px;height:52px;}
+  body.mobile .rail .sep{width:1px;height:auto;margin:6px 2px;}
+  /* inspector → hoja inferior */
+  body.mobile .side{position:fixed;left:0;right:0;bottom:0;top:auto;width:100%;
+    height:calc(60px + env(safe-area-inset-bottom));transition:height .22s ease;
+    border-left:0;border-top:1px solid var(--line2);z-index:40;
+    border-radius:16px 16px 0 0;box-shadow:0 -10px 34px rgba(0,0,0,.4);
+    padding-bottom:env(safe-area-inset-bottom);}
+  body.mobile .side.mid{height:46vh;}
+  body.mobile .side.full{height:88vh;}
+  body.mobile .side .panelbody{display:none;}
+  body.mobile .side.mid .panelbody,body.mobile .side.full .panelbody{display:block;}
+  body.mobile .side .status{display:none;}
+  body.mobile .sheethandle{display:block;height:16px;cursor:grab;touch-action:none;}
+  body.mobile .sheethandle i{display:block;width:44px;height:5px;border-radius:3px;
+    background:var(--line2);margin:6px auto 0;}
+  body.mobile .tabs{overflow-x:auto;}
+  body.mobile .tabs button{white-space:nowrap;flex:none;padding:0 16px;min-height:38px;}
+  body.mobile .tabs::-webkit-scrollbar{display:none;}
+  /* reubicaciones sobre el lienzo */
+  body.mobile .zoombar{bottom:calc(140px + env(safe-area-inset-bottom));right:8px;}
+  body.mobile .floorbar{top:calc(54px + env(safe-area-inset-top));bottom:auto;left:8px;}
+  body.mobile #selbar{left:50%;transform:translateX(-50%);top:calc(8px);}
+  body.mobile .shapebar{top:auto;bottom:calc(140px + env(safe-area-inset-bottom));}
+  body.mobile #selbar.shapebar{bottom:auto;}
+  body.mobile .fabs{display:flex;position:absolute;right:8px;top:8px;gap:6px;z-index:6;}
+  body.mobile .fabs button{width:42px;height:42px;justify-content:center;background:var(--panel);font-size:17px;}
+  body.mobile .hint{max-width:94%;font-size:11px;}
 </style>
 
 <div class="topbar">
-  <div class="brand"><span class="dot"></span>PlanEléctrico Pro <small>BETA · ETAPA 10</small></div>
-  <div class="grp">
+  <div class="brand"><span class="dot"></span>PlanEléctrico Pro <small>BETA · ETAPA 11</small></div>
+  <div class="grp" id="grpUndo">
     <button id="undo" title="Deshacer (Ctrl+Z)">↶</button>
     <button id="redo" title="Rehacer (Ctrl+Y)">↷</button>
   </div>
@@ -204,12 +246,12 @@
     <input id="xraySlider" type="range" min="15" max="100" value="100" title="Opacidad de paredes" style="width:92px;align-self:center;accent-color:var(--accent)">
     <button id="orbitReset" class="ghost">↺ Vista</button>
   </div>
-  <div class="grp">
+  <div class="grp" id="grpSnap">
     <button id="gridBtn" class="ghost">▤ Grilla</button>
     <button id="snapBtn" class="on ghost" title="Snap a grilla 5 cm">🧲 Snap</button>
     <button id="lockBtn" class="ghost" title="Bloqueo 45° (o mantén Shift)">📐 45°</button>
   </div>
-  <div class="grp">
+  <div class="grp" id="grpAcciones">
     <button id="projBtn" class="ghost">📁 <span id="projName" style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Proyecto</span></button>
     <button id="exportBtn" class="ghost">⇩ Export</button>
     <button id="importBtn" class="ghost">⇧ Importar</button>
@@ -220,6 +262,7 @@
     <button id="helpBtn" class="ghost" title="Tutorial">?</button>
   </div>
   <div class="save" id="saveInd"><span class="led"></span><span id="saveTxt">Guardado</span></div>
+  <button id="menuMovil" class="ghost" style="display:none" title="Menú">⋮</button>
   <button class="mtoggle ghost" id="mtoggle">☰</button>
   <input type="file" id="fileInput" accept="application/json" style="display:none">
   <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
@@ -242,6 +285,7 @@
       <button data-shape="U" title="Forma U">U</button>
     </div>
     <div class="shapebar" id="elembar" style="display:none"></div>
+    <div class="fabs" id="fabs"><button id="fabU" title="Deshacer">↶</button><button id="fabR" title="Rehacer">↷</button></div>
     <div class="shapebar" id="selbar" style="display:none"></div>
     <div class="floorbar" id="floorbar"></div>
     <div class="zoombar">
@@ -252,6 +296,7 @@
   </div>
 
   <div class="side" id="side">
+    <div class="sheethandle" id="sheethandle"><i></i></div>
     <div class="tabs">
       <button data-tab="insp" class="on">Inspector</button>
       <button data-tab="cir">⚡ Circuitos</button>
@@ -637,7 +682,10 @@ let linkMode=null;  // id del apagador en modo "vincular luces"
 let calibMode=null; // calibración de escala del fondo
 let fondoURL=null, fondoLoading=false;
 function isSelected(t,id){ return selection.some(s=>s.type===t&&s.id===id); }
-function setSel(arr){ selection=arr; selected=arr.length===1?arr[0]:null; }
+function setSel(arr){ selection=arr; selected=arr.length===1?arr[0]:null;
+  try{ if(document.body.classList.contains("mobile")){
+    if(arr.length&&sheetState==="peek") setSheet("mid");
+    else if(!arr.length&&sheetState!=="peek") setSheet("peek"); } }catch(e){} }
 function toggleSel(t,id){ const i=selection.findIndex(s=>s.type===t&&s.id===id);
   if(i>=0) selection.splice(i,1); else selection.push({type:t,id});
   selected=selection.length===1?selection[0]:null; }
@@ -747,10 +795,11 @@ function render(skipPanel){
       "stroke-linecap":"round",opacity:.35,style:"pointer-events:none"})); }
     // medida sobre el punto medio del arco
     const L=wallLen(w); const mp=wallPointAt(w,L/2); const ang=mp.ang*180/Math.PI;
+    if(L*scale>36){ // LOD: ocultar medidas de paredes chicas en pantalla
     const t=el("text",{x:mp.x,y:mp.y,fill:"var(--ink)","font-size":13/scale,
       "text-anchor":"middle",dy:-(settings.wallT/2+6)/scale,style:"pointer-events:none;font-family:var(--mono)",
       transform:`rotate(${Math.abs(ang)>90?ang+180:ang} ${mp.x} ${mp.y})`});
-    t.textContent=fmt(L)+(w.curve?" ⌒":"")+(w.name?" · "+w.name:""); gWalls.appendChild(t);
+    t.textContent=fmt(L)+(w.curve?" ⌒":"")+(w.name?" · "+w.name:""); gWalls.appendChild(t); }
     // rombo de curvatura estilo Illustrator (pared seleccionada, herramienta Sel)
     if(isSel&&selection.length===1&&tool==="select"){
       const mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
@@ -787,7 +836,7 @@ function render(skipPanel){
     const tt=el("text",{x:mid.x,y:mid.y,"font-size":11/scale,fill:c.comoda?"var(--ink)":"var(--danger)",
       "text-anchor":"middle",style:"pointer-events:none;font-family:var(--mono)",
       transform:"rotate("+(Math.abs(dg)>90?dg+180:dg)+" "+mid.x+" "+mid.y+")"});
-    tt.textContent="SUBE · "+c.N+" esc."+(c.comoda?"":" ⚠"); gWalls.appendChild(tt);
+    if(st.largo*scale>50){ tt.textContent="SUBE · "+c.N+" esc."+(c.comoda?"":" ⚠"); gWalls.appendChild(tt); }
   });
 
   // nodos (anclas)
@@ -828,11 +877,12 @@ function render(skipPanel){
     }
     // medida visible de la apertura (rotada como la de la pared)
     const degA=ang*180/Math.PI;
+    if(o.width*scale>26){
     const mt=el("text",{x:cx,y:cy,"font-size":11/scale,fill:o.kind==="door"?"var(--soft)":"var(--blue)",
       "text-anchor":"middle",dy:(settings.wallT/2+13)/scale,
       style:"pointer-events:none;font-family:var(--mono)",
       transform:`rotate(${Math.abs(degA)>90?degA+180:degA} ${cx} ${cy})`});
-    mt.textContent=fmt(o.width); gOpen.appendChild(mt);
+    mt.textContent=fmt(o.width); gOpen.appendChild(mt); }
     // zona de agarre central (mover a lo largo de la pared)
     gOpen.appendChild(el("circle",{cx,cy,r:Math.max(12/scale,hw*0.6),fill:"transparent",
       stroke:isSel?"var(--sel)":"transparent","stroke-width":2/scale,
@@ -887,9 +937,11 @@ function render(skipPanel){
     r.pts.forEach(p=>gElem.appendChild(el("circle",{cx:p.x,cy:p.y,r:3/scale,fill:col,
       style:"pointer-events:none"})));
     const mid=r.pts[Math.floor(r.pts.length/2)];
+    if(routeLen(r)*scale>48){
     const rt=el("text",{x:mid.x,y:mid.y,"font-size":11/scale,fill:col,"text-anchor":"middle",
       dy:-9/scale,style:"pointer-events:none;font-family:var(--mono)"});
-    rt.textContent="tubo "+fmt(routeLen(r)); gElem.appendChild(rt);
+    rt.textContent="tubo "+fmt(routeLen(r)); gElem.appendChild(rt); }
+    if(routeLen(r)*scale>48)
     if(cir){ const ced=el("text",{x:mid.x,y:mid.y,"font-size":9.5/scale,fill:col,"text-anchor":"middle",
       dy:7/scale,style:"pointer-events:none;font-family:var(--mono)",opacity:.85});
       ced.textContent=cedulaDe(cir); gElem.appendChild(ced); }
@@ -1121,7 +1173,9 @@ function updateHint(){ const h=document.getElementById("hint");
   if(CATS[tool]){ const v=(settings.varByCat[tool]&&CATS[tool].includes(settings.varByCat[tool]))?settings.varByCat[tool]:CATS[tool][0];
     txt=(CATS[tool].length>1?"Elige el símbolo arriba a la izquierda · ":"")+
       "Clic para colocar: "+ELEMENTS[v].name+" ("+mon(priceOf(v))+(ELEMENTS[v].va?" · "+ELEMENTS[v].va+" VA":"")+")"; }
-  h.textContent=txt; h.style.display=txt?"":"none"; }
+  h.textContent=txt; h.style.display=txt?"":"none";
+  if(document.body.classList.contains("mobile")&&txt){ clearTimeout(window.__hintT);
+    window.__hintT=setTimeout(()=>{ h.style.display="none"; },4000); } }
 
 function refSnapPoint(a,b){ // iguala a la medida de la 1ª pared del proyecto si está cerca
   if(!doc.walls.length) return b;
@@ -1162,6 +1216,8 @@ function snapWorld(p,fromNode){ // imán: nodo del piso activo > esquina del pis
 
 // --- gestos táctiles: dos dedos = pellizco (zoom) + mover lienzo ---
 const tPointers=new Map(); let pinch=null, wasPinch=false;
+let pinchT0=0, pinchMoved=false, pinchMidX=0, pinchMidY=0;
+let lastTapT=0,lastTapX=0,lastTapY=0,downX=0,downY=0,lpTimer=null;
 svg.addEventListener("pointerdown",ev=>{
   if(ev.pointerType!=="touch") return;
   tPointers.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
@@ -1172,6 +1228,7 @@ svg.addEventListener("pointerdown",ev=>{
     const pts=[...tPointers.values()];
     pinch={d0:Math.max(1,Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y)),
       mx:(pts[0].x+pts[1].x)/2,my:(pts[0].y+pts[1].y)/2,vb0:{x:vb.x,y:vb.y,w:vb.w,h:vb.h}};
+    pinchT0=Date.now(); pinchMoved=false; pinchMidX=pinch.mx; pinchMidY=pinch.my;
     ev.stopPropagation(); render();
   }
 },true);
@@ -1182,6 +1239,7 @@ svg.addEventListener("pointermove",ev=>{
     const pts=[...tPointers.values()];
     const d=Math.max(1,Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y));
     const mx=(pts[0].x+pts[1].x)/2,my=(pts[0].y+pts[1].y)/2;
+    if(Math.abs(d-pinch.d0)>14||Math.hypot(mx-pinch.mx,my-pinch.my)>14) pinchMoved=true;
     const r=svg.getBoundingClientRect(); const k=pinch.d0/d;
     const w2=Math.max(200,Math.min(40000,pinch.vb0.w*k)); const h2=w2*(r.height/r.width);
     const wx=pinch.vb0.x+(pinch.mx-r.left)/r.width*pinch.vb0.w;
@@ -1193,15 +1251,55 @@ svg.addEventListener("pointermove",ev=>{
 },{capture:true,passive:false});
 function endTouch(ev){
   if(ev.pointerType!=="touch") return;
-  if(wasPinch&&tPointers.has(ev.pointerId)) ev.stopPropagation(); // que el fin del pellizco no dispare commits
+  if(wasPinch&&tPointers.has(ev.pointerId)) ev.stopPropagation();
   tPointers.delete(ev.pointerId);
   if(tPointers.size<2) pinch=null;
-  if(tPointers.size===0) wasPinch=false;
+  if(tPointers.size===0){
+    // tap con DOS dedos (sin mover, <260 ms) = alejar
+    if(wasPinch&&!pinchMoved&&Date.now()-pinchT0<260){ zoomAt(pinchMidX,pinchMidY,1.6); }
+    wasPinch=false; }
 }
 // en WINDOW (no en el svg): aunque el dedo se levante fuera del lienzo, JAMÁS quedan dedos fantasma
 window.addEventListener("pointerup",endTouch,true);
 window.addEventListener("pointercancel",endTouch,true);
 window.addEventListener("blur",()=>{ tPointers.clear(); pinch=null; wasPinch=false; });
+
+// --- doble tap = acercar · long-press = info del elemento (táctil) ---
+function tipCorto(host){ const k=host.getAttribute("data-kind"), id=host.getAttribute("data-id");
+  if(k==="element"){ const e=doc.elements.find(x=>x.id===id); if(!e)return null; const i=elInfo(e.type);
+    const c=circuitOf(e.circuitId);
+    return i.icon+" "+i.name+(e.label?" · "+e.label:"")+(c?" · ⚡"+c.name:"")+" · "+mon(priceOf(e.type)); }
+  if(k==="wall"){ const w=doc.walls.find(x=>x.id===id); if(!w)return null;
+    return "🧱 "+fmt(wallLen(w))+(w.curve?" ⌒":"")+" · "+(w.material||""); }
+  if(k==="opening"){ const o=doc.openings.find(x=>x.id===id); if(!o)return null;
+    return (o.kind==="door"?"🚪 ":"🪟 ")+fmt(o.width); }
+  if(k==="route"){ const r=doc.routes.find(x=>x.id===id); if(!r)return null;
+    const c=circuitOf(r.circuitId);
+    return "〰️ "+fmt(routeLen(r))+(c?" · "+cedulaDe(c):""); }
+  if(k==="stair"){ const st=doc.stairs.find(x=>x.id===id); if(!st)return null;
+    const c=stairCalc(st); return "🪜 "+c.N+" escalones · CH "+c.ch.toFixed(1)+" cm"; }
+  if(k==="photo"){ const ph=doc.photos.find(x=>x.id===id); return "📷 "+((ph&&ph.nota)||"foto"); }
+  return null; }
+svg.addEventListener("pointerdown",ev=>{
+  if(ev.pointerType!=="touch") return;
+  downX=ev.clientX; downY=ev.clientY;
+  clearTimeout(lpTimer);
+  if(tPointers.size<=1){ const host=ev.target.closest&&ev.target.closest("[data-kind]");
+    if(host){ lpTimer=setTimeout(()=>{ const txt=tipCorto(host);
+      if(txt){ avisar(txt); try{ navigator.vibrate&&navigator.vibrate(12); }catch(e2){} } },520); } }
+});
+svg.addEventListener("pointermove",ev=>{ if(ev.pointerType!=="touch")return;
+  if(Math.hypot(ev.clientX-downX,ev.clientY-downY)>12) clearTimeout(lpTimer); });
+svg.addEventListener("pointerup",ev=>{
+  if(ev.pointerType!=="touch") return;
+  clearTimeout(lpTimer);
+  if(wasPinch) return;
+  if(Math.hypot(ev.clientX-downX,ev.clientY-downY)>14){ lastTapT=0; return; }
+  const now=Date.now();
+  if(now-lastTapT<300&&Math.hypot(ev.clientX-lastTapX,ev.clientY-lastTapY)<26){
+    zoomAt(ev.clientX,ev.clientY,0.55); lastTapT=0; return; }
+  lastTapT=now; lastTapX=ev.clientX; lastTapY=ev.clientY;
+});
 
 // --- tooltip flotante al pasar el cursor (solo mouse) ---
 function hideTip(){ const t=document.getElementById("tip"); if(t) t.style.display="none"; }
@@ -1517,7 +1615,8 @@ function commitDim(){ doc.dims.push({id:uid("d"),a:{...draft.start},b:{...draft.
 /* ===================== Panel derecho ===================== */
 let tab="insp";
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
-  tab=b.dataset.tab; document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("on",x===b)); renderPanel(); });
+  tab=b.dataset.tab; document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("on",x===b)); renderPanel();
+  if(document.body.classList.contains("mobile")&&sheetState==="peek") setSheet("mid"); });
 
 function renderPanel(){ const p=document.getElementById("panelbody");
   if(tab==="layers") return renderLayers(p);
@@ -2770,7 +2869,55 @@ function seed(){ const s=[[0,0],[500,0],[500,400],[0,400]].map(([x,y])=>{const i
   doc.elements.push({id:uid("e"),type:"panel",x:40,y:360,label:"Tablero",notes:""});
   doc.labels.push({id:uid("l"),x:250,y:120,text:"Sala"});
 }
-window.addEventListener("resize",()=>{ updateScale(); if(v3d)build3d(); });
+function esMovil(){ try{ return (matchMedia("(pointer:coarse)").matches&&innerWidth<=1100)||innerWidth<=900; }catch(e){ return innerWidth<=900; } }
+function aplicarModo(){ document.body.classList.toggle("mobile",esMovil()); }
+let sheetState="peek";
+function setSheet(st){ sheetState=st; const sd=document.querySelector(".side"); if(!sd)return;
+  sd.classList.toggle("mid",st==="mid"); sd.classList.toggle("full",st==="full"); }
+async function abrirMenuMovil(){
+  const k=await pedirOpcion("Menú",[
+    {k:"grid",txt:(settings.grid?"✓ ":"　")+"▤ Grilla"},
+    {k:"snap",txt:(settings.snap?"✓ ":"　")+"🧲 Imán (snap)"},
+    {k:"lock",txt:(settings.lock45?"✓ ":"　")+"📐 Bloqueo 45°"},
+    {k:"exp",txt:"⇩ Exportar (PDF · JSON · DXF…)"},
+    {k:"imp",txt:"⇧ Importar respaldo JSON"},
+    {k:"fondo",txt:"🖼 Fondo de calco"},
+    {k:"blk",txt:"📦 Mis bloques"},
+    {k:"proj",txt:"📁 Mis proyectos"},
+    {k:"nuevo",txt:"✦ Nuevo proyecto"},
+    {k:"full",txt:"⛶ Pantalla completa"},
+    {k:"tema",txt:"◐ Cambiar tema"},
+    {k:"ayuda",txt:"? Tutorial"}]);
+  if(!k) return;
+  const acc={
+    grid:()=>document.getElementById("gridBtn").click(),
+    snap:()=>document.getElementById("snapBtn").click(),
+    lock:()=>document.getElementById("lockBtn").click(),
+    exp:()=>exportMenu(), imp:()=>document.getElementById("fileInput").click(),
+    fondo:()=>document.getElementById("fondoBtn").onclick(),
+    blk:()=>showBloques(), proj:()=>showProjects(),
+    nuevo:()=>document.getElementById("clearBtn").onclick(),
+    tema:()=>document.getElementById("themeBtn").click(),
+    ayuda:()=>showTutorial(),
+    full:()=>{ try{ document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen(); }catch(e){ avisar("Pantalla completa no disponible aquí."); } }
+  }; if(acc[k]) acc[k]();
+}
+document.getElementById("menuMovil").onclick=abrirMenuMovil;
+document.getElementById("fabU").onclick=undo;
+document.getElementById("fabR").onclick=redo;
+// asa del bottom sheet: tap alterna, arrastre sube/baja
+(function(){ const h=document.getElementById("sheethandle"); if(!h)return;
+  let y0=null,st0=null;
+  h.addEventListener("pointerdown",ev=>{ y0=ev.clientY; st0=sheetState;
+    try{ h.setPointerCapture(ev.pointerId); }catch(e){} });
+  h.addEventListener("pointerup",ev=>{ if(y0==null)return;
+    const dy=ev.clientY-y0; y0=null;
+    const orden=["peek","mid","full"]; let i=orden.indexOf(st0);
+    if(dy<-35) i=Math.min(2,i+1); else if(dy>35) i=Math.max(0,i-1);
+    else i=(i+1)%3; // tap: ciclar
+    setSheet(orden[i]); });
+})();
+window.addEventListener("resize",()=>{ updateScale(); if(v3d)build3d(); aplicarModo(); });
 
 // PWA: service worker SOLO en hosting propio (nunca en el visor de artifacts)
 try{ if("serviceWorker" in navigator && location.protocol.indexOf("http")===0 &&
@@ -2780,6 +2927,7 @@ try{ if("serviceWorker" in navigator && location.protocol.indexOf("http")===0 &&
 // init
 if(!loadSaved()){ seed(); projectId=newProjectId(); projectName="Casa de ejemplo"; }
 normalizeDoc(doc);
+aplicarModo();
 setTool("select");
 requestAnimationFrame(()=>{ updateScale(); fitView(); history=[snap()]; hi=0; updateProjLabel(); render(); scheduleSave();
   if(!settings.tutoVisto) showTutorial(); });
