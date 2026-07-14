@@ -147,7 +147,9 @@
   #dragGhost.sobre{border-color:var(--ok,#3fb950);box-shadow:0 12px 30px rgba(0,0,0,.45),0 0 0 3px rgba(63,185,80,.25);}
   #dragGhost.suelta{transition:transform .15s,opacity .15s;transform:translate(-50%,-50%) scale(.3);opacity:0;}
   #dragGhost.vuelve{transition:left .18s ease,top .18s ease,opacity .18s;opacity:.3;}
-  body.mobile .tool.ficha{touch-action:pan-x;}
+  /* iOS/Safari solo honra touch-action:none de forma fiable para drags con pointer events;
+     el scroll horizontal del rail se hace manual en activarDragFicha (gesto horizontal). */
+  .tool.ficha{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;}
   .xp{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--accent);}
   .xpbar{flex:1;height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;}
   .xpbar i{display:block;height:100%;background:var(--accent);width:0;}
@@ -2381,7 +2383,7 @@ function avisarCot(msg){
     _cartToast.style.cssText="position:fixed;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--accent);color:var(--ink);padding:10px 16px;border-radius:10px;z-index:120;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:82%;text-align:center;cursor:pointer";
     _cartToast.onclick=()=>{ _cartToast.remove(); abrirTab("cot"); if(document.body.classList.contains("mobile")) setSheet("mid"); };
     document.body.appendChild(_cartToast); }
-  _cartToast.style.bottom=document.body.classList.contains("mobile")?"calc(76px + env(safe-area-inset-bottom))":"26px";
+  _cartToast.style.bottom=document.body.classList.contains("mobile")?"calc(150px + env(safe-area-inset-bottom))":"26px"; // sobre el rail: no tapa las fichas
   _cartToast.innerHTML=msg+' <span style="color:var(--accent);font-weight:700">· Ver 🧾</span>';
   clearTimeout(_cartTimer); _cartTimer=setTimeout(()=>{ if(_cartToast) _cartToast.remove(); },2600); }
 
@@ -2587,7 +2589,9 @@ function moverGhost(ev){ const g=ghostEl();
     hoverSnap={x:snapNum(w.x),y:snapNum(w.y)}; render(true); }
   else if(hoverSnap){ hoverSnap=null; render(true); } }
 function soltarFicha(ev,cancelado){
-  const df=dragFicha; dragFicha=null; if(!df||!df.activo) return; // tap simple → click normal
+  const df=dragFicha; dragFicha=null; if(!df) return;
+  if(df.scroll){ df.btn.__suprimeClick=true; return; } // fue scroll manual de la bandeja
+  if(!df.activo) return; // tap simple → click normal
   df.btn.__suprimeClick=true;
   const g=ghostEl();
   const bajo=document.elementFromPoint(ev.clientX,Math.max(0,ev.clientY-GH_OFF));
@@ -2609,8 +2613,13 @@ function activarDragFicha(btn,cat){
     try{ btn.setPointerCapture(ev.pointerId); }catch(e){} });
   btn.addEventListener("pointermove",ev=>{
     if(!dragFicha||dragFicha.id!==ev.pointerId) return;
+    if(dragFicha.scroll){ // bandeja móvil: el scroll ya no es nativo (touch-action:none), lo hacemos aquí
+      const rl=document.getElementById("rail"); rl.scrollLeft+=dragFicha.lx-ev.clientX; dragFicha.lx=ev.clientX; return; }
     if(!dragFicha.activo){
-      if(Math.hypot(ev.clientX-dragFicha.x0,ev.clientY-dragFicha.y0)<10) return;
+      const dx=ev.clientX-dragFicha.x0, dy=ev.clientY-dragFicha.y0;
+      if(Math.hypot(dx,dy)<10) return;
+      if(document.body.classList.contains("mobile")&&Math.abs(dx)>Math.abs(dy)){
+        dragFicha.scroll=true; dragFicha.lx=ev.clientX; return; } // horizontal = desplazar la bandeja
       dragFicha.activo=true; mostrarGhost(cat);
       try{ navigator.vibrate&&navigator.vibrate(8); }catch(e){} }
     ev.preventDefault(); moverGhost(ev); });
