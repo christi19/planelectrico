@@ -100,6 +100,11 @@
   .tabs button{flex:1;border:0;border-radius:0;background:transparent;color:var(--soft);
     border-bottom:2px solid transparent;min-height:42px;font-size:12px;}
   .tabs button.on{color:var(--ink);border-bottom-color:var(--accent);background:transparent;}
+  .cotbadge{display:inline-block;min-width:17px;padding:1px 5px;margin-left:2px;border-radius:999px;
+    background:var(--accent);color:#08131f;font-size:10px;font-weight:800;text-align:center;
+    font-variant-numeric:tabular-nums;vertical-align:1px;}
+  .cotbadge.pop{animation:cbpop .3s ease;}
+  @keyframes cbpop{50%{transform:scale(1.4);}}
   .panelbody{flex:1;overflow-y:auto;padding:14px;}
   .field{margin-bottom:12px;}
   .field label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.1em;
@@ -120,6 +125,29 @@
   table.cot th,table.cot td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--line);}
   table.cot td.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;}
   table.cot tfoot td{font-weight:700;border-top:1px solid var(--line2);}
+  .cottotal{position:sticky;top:-14px;z-index:5;margin:-14px -14px 10px;padding:12px 14px;
+    background:var(--panel);border-bottom:2px solid var(--accent);
+    display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+  .cottotal b{font-size:17px;font-variant-numeric:tabular-nums;font-family:var(--mono);}
+  .cartrow{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);}
+  .cartrow .ci{font-size:20px;flex:none;width:28px;text-align:center;}
+  .cartrow .cn{flex:1;min-width:0;font-size:12.5px;}
+  .cartrow .cn small{display:block;color:var(--soft);font-size:10.5px;}
+  .cartrow .cq{flex:none;font-family:var(--mono);color:var(--soft);font-size:12px;}
+  .cartrow input{width:60px;flex:none;background:var(--panel2);border:1px solid var(--line);
+    border-radius:6px;color:var(--ink);padding:3px 4px;text-align:right;font-size:12px;}
+  .cartrow .cs{flex:none;min-width:56px;text-align:right;font-variant-numeric:tabular-nums;
+    font-family:var(--mono);font-size:12.5px;}
+  #dragGhost{position:fixed;display:none;z-index:200;pointer-events:none;
+    flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    width:64px;height:64px;border-radius:14px;background:var(--panel);
+    border:1.5px solid var(--accent);box-shadow:0 12px 30px rgba(0,0,0,.45);
+    transform:translate(-50%,-50%) scale(1.1);opacity:.92;font-size:10px;color:var(--ink);}
+  #dragGhost .ic{font-size:26px;line-height:1;}
+  #dragGhost.sobre{border-color:var(--ok,#3fb950);box-shadow:0 12px 30px rgba(0,0,0,.45),0 0 0 3px rgba(63,185,80,.25);}
+  #dragGhost.suelta{transition:transform .15s,opacity .15s;transform:translate(-50%,-50%) scale(.3);opacity:0;}
+  #dragGhost.vuelve{transition:left .18s ease,top .18s ease,opacity .18s;opacity:.3;}
+  body.mobile .tool.ficha{touch-action:pan-x;}
   .xp{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--accent);}
   .xpbar{flex:1;height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;}
   .xpbar i{display:block;height:100%;background:var(--accent);width:0;}
@@ -196,10 +224,10 @@
     border-radius:10px;padding:4px;box-shadow:0 6px 20px rgba(0,0,0,.3);}
   /* rail → dock horizontal inferior */
   body.mobile .rail{position:fixed;left:0;right:0;bottom:calc(60px + env(safe-area-inset-bottom));
-    top:auto;width:100%;height:66px;flex-direction:row;overflow-x:auto;overflow-y:hidden;
+    top:auto;width:100%;height:72px;flex-direction:row;overflow-x:auto;overflow-y:hidden;
     border-right:0;border-top:1px solid var(--line);z-index:35;padding:6px 8px;gap:6px;}
   body.mobile .rail::-webkit-scrollbar{display:none;}
-  body.mobile .tool{width:52px;height:52px;}
+  body.mobile .tool{width:56px;height:56px;}
   body.mobile .rail .sep{width:1px;height:auto;margin:6px 2px;}
   /* inspector → hoja inferior */
   body.mobile .side{position:fixed;left:0;right:0;bottom:0;top:auto;width:100%;
@@ -219,10 +247,10 @@
   body.mobile .tabs button{white-space:nowrap;flex:none;padding:0 16px;min-height:38px;}
   body.mobile .tabs::-webkit-scrollbar{display:none;}
   /* reubicaciones sobre el lienzo */
-  body.mobile .zoombar{bottom:calc(140px + env(safe-area-inset-bottom));right:8px;}
+  body.mobile .zoombar{bottom:calc(146px + env(safe-area-inset-bottom));right:8px;}
   body.mobile .floorbar{top:calc(54px + env(safe-area-inset-top));bottom:auto;left:8px;}
   body.mobile #selbar{left:50%;transform:translateX(-50%);top:calc(8px);}
-  body.mobile .shapebar{top:auto;bottom:calc(140px + env(safe-area-inset-bottom));}
+  body.mobile .shapebar{top:auto;bottom:calc(146px + env(safe-area-inset-bottom));}
   body.mobile #selbar.shapebar{bottom:auto;}
   body.mobile .fabs{display:flex;position:absolute;right:8px;top:8px;gap:6px;z-index:6;}
   body.mobile .fabs button{width:42px;height:42px;justify-content:center;background:var(--panel);font-size:17px;}
@@ -269,6 +297,7 @@
   <input type="file" id="fondoInput" accept="image/*" style="display:none">
 </div>
 <div id="tip"></div>
+<div id="dragGhost"></div>
 <div id="printsheet"></div>
 
 <div class="body">
@@ -285,7 +314,7 @@
       <button data-shape="U" title="Forma U">U</button>
     </div>
     <div class="shapebar" id="elembar" style="display:none"></div>
-    <div class="fabs" id="fabs"><button id="fabU" title="Deshacer">↶</button><button id="fabR" title="Rehacer">↷</button></div>
+    <div class="fabs" id="fabs"><button id="fabU" title="Deshacer">↶</button><button id="fabR" title="Rehacer">↷</button><button id="fabOK" title="Terminar trazo" style="display:none">✔</button><button id="fabX" title="Cancelar trazo" style="display:none">✕</button></div>
     <div class="shapebar" id="selbar" style="display:none"></div>
     <div class="floorbar" id="floorbar"></div>
     <div class="zoombar">
@@ -301,7 +330,7 @@
       <button data-tab="insp" class="on">Inspector</button>
       <button data-tab="cir">⚡ Circuitos</button>
       <button data-tab="layers">Capas</button>
-      <button data-tab="cot">Cotización</button>
+      <button data-tab="cot">Cotización <span id="cotBadge" class="cotbadge" hidden>0</span></button>
     </div>
     <div class="panelbody" id="panelbody"></div>
     <div class="status" id="status"></div>
@@ -563,6 +592,7 @@ function pushHistory(){ pruneNodes(); history=history.slice(0,hi+1); history.pus
 function restore(s){ doc.nodes=s.nodes;doc.walls=s.walls;doc.openings=s.openings;
   doc.elements=s.elements;doc.dims=s.dims;doc.labels=s.labels;
   if(s.circuits)doc.circuits=s.circuits; if(s.routes)doc.routes=s.routes; if(s.photos)doc.photos=s.photos; if(s.stairs)doc.stairs=s.stairs;
+  draft=null; hoverSnap=null; pruneNodes(); // el trazo en curso no sobrevive al deshacer: sin anclas huérfanas
   setSel([]); }
 function undo(){ if(hi>0){ hi--; restore(clone(history[hi])); render(); scheduleSave(); } }
 function redo(){ if(hi<history.length-1){ hi++; restore(clone(history[hi])); render(); scheduleSave(); } }
@@ -913,6 +943,7 @@ function render(skipPanel){
   doc.elements.forEach(e=>{ if(!enPiso(e))return; const info=elInfo(e.type); const isSel=isSelected("element",e.id);
     const cir=circuitOf(e.circuitId);
     const g=el("g",{"data-id":e.id,"data-kind":"element",style:"cursor:move"});
+    g.appendChild(el("circle",{cx:e.x,cy:e.y,r:22/scale,fill:"transparent"})); // blanco táctil 44px
     if(cir){ g.appendChild(el("circle",{cx:e.x,cy:e.y,r:20/scale,fill:"none",
       stroke:cir.color,"stroke-width":2.5/scale,opacity:.9})); }
     g.appendChild(el("circle",{cx:e.x,cy:e.y,r:16/scale,fill:"var(--panel)",
@@ -1017,7 +1048,10 @@ function render(skipPanel){
       sb2.querySelector("#sb_del").onclick=deleteSelected;
       sb2.querySelector("#sb_x").onclick=()=>{ setSel([]); render(); };
     } else sb2.style.display="none"; }
-  applyLayers(); if(!skipPanel) renderPanel(); renderStatus();
+  // FABs ✔/✕ (móvil): visibles solo con un trazo en curso
+  const fOK=document.getElementById("fabOK"),fX=document.getElementById("fabX");
+  if(fOK){ const on=!!draft; fOK.style.display=on?"":"none"; fX.style.display=on?"":"none"; }
+  applyLayers(); if(!skipPanel) renderPanel(); renderStatus(); updateCotBadge();
 }
 
 function drawGrid(){
@@ -1136,6 +1170,8 @@ function applyLayers(){ ["structure","openings","electrical","labels"].forEach(k
 let tool="select";
 let action=null; // {type,...}
 function setTool(t){ tool=t; draft=null; setSel([]);
+  if(CATS[t]&&!settings.dragVisto){ settings.dragVisto=true; scheduleSave();
+    avisar("💡 Tip: también podés ARRASTRAR la ficha de la barra directo al plano, como en Duolingo."); }
   document.querySelectorAll(".tool").forEach(b=>b.classList.toggle("on",b.dataset.tool===t));
   svg.classList.toggle("pan",t==="pan");
   svg.style.cursor = t==="select"?"default":(t==="pan"?"grab":"crosshair");
@@ -1172,7 +1208,8 @@ function updateHint(){ const h=document.getElementById("hint");
   let txt=map[tool]||"";
   if(CATS[tool]){ const v=(settings.varByCat[tool]&&CATS[tool].includes(settings.varByCat[tool]))?settings.varByCat[tool]:CATS[tool][0];
     txt=(CATS[tool].length>1?"Elige el símbolo arriba a la izquierda · ":"")+
-      "Clic para colocar: "+ELEMENTS[v].name+" ("+mon(priceOf(v))+(ELEMENTS[v].va?" · "+ELEMENTS[v].va+" VA":"")+")"; }
+      "Clic para colocar: "+ELEMENTS[v].name+" ("+mon(priceOf(v))+(ELEMENTS[v].va?" · "+ELEMENTS[v].va+" VA":"")+")"+
+      " · o ARRASTRÁ la ficha directo al plano"; }
   h.textContent=txt; h.style.display=txt?"":"none";
   if(document.body.classList.contains("mobile")&&txt){ clearTimeout(window.__hintT);
     window.__hintT=setTimeout(()=>{ h.style.display="none"; },4000); } }
@@ -1282,6 +1319,7 @@ function tipCorto(host){ const k=host.getAttribute("data-kind"), id=host.getAttr
   return null; }
 svg.addEventListener("pointerdown",ev=>{
   if(ev.pointerType!=="touch") return;
+  if(dragFicha&&dragFicha.activo) return; // sin long-press mientras se arrastra una ficha
   downX=ev.clientX; downY=ev.clientY;
   clearTimeout(lpTimer);
   if(tPointers.size<=1){ const host=ev.target.closest&&ev.target.closest("[data-kind]");
@@ -1363,6 +1401,7 @@ svg.addEventListener("dblclick",async ev=>{
         pushHistory(); render(); } } } });
 
 function onDown(ev){
+  if(dragFicha&&dragFicha.activo) return; // un 2º dedo durante el drag de ficha no dibuja
   ev.preventDefault(); svg.setPointerCapture&&svg.setPointerCapture(ev.pointerId);
   const w=toWorld(ev);
   if(calibMode){
@@ -1431,10 +1470,16 @@ function onDown(ev){
     else draft={type:"route",pts:[sp],cursor:sp};
     render(); return; }
 
-  if(CATS[tool]){ const sp={x:snapNum(w.x),y:snapNum(w.y)};
-    const et=(settings.varByCat[tool]&&CATS[tool].includes(settings.varByCat[tool]))?settings.varByCat[tool]:CATS[tool][0];
-    const e={id:uid("e"),type:et,x:sp.x,y:sp.y,label:"",notes:"",piso:doc.pisoActivo}; doc.elements.push(e);
-    setSel([{type:"element",id:e.id}]); addXP(3); pushHistory(); render(); return; }
+  if(CATS[tool]){ colocarElemento(tool,{x:snapNum(w.x),y:snapNum(w.y)}); return; }
+}
+
+// alta de un elemento eléctrico (tap en canvas o drop desde la bandeja)
+function colocarElemento(cat,sp){
+  const et=(settings.varByCat[cat]&&CATS[cat].includes(settings.varByCat[cat]))?settings.varByCat[cat]:CATS[cat][0];
+  const e={id:uid("e"),type:et,x:sp.x,y:sp.y,label:"",notes:"",piso:doc.pisoActivo}; doc.elements.push(e);
+  setSel([{type:"element",id:e.id}]); addXP(3); pushHistory(); render();
+  const inf=elInfo(et); avisarCot(inf.icon+" "+inf.name+" añadido — total "+mon(cotTotales().total));
+  return e;
 }
 
 function startSelect(ev,w){
@@ -1614,11 +1659,14 @@ function commitDim(){ doc.dims.push({id:uid("d"),a:{...draft.start},b:{...draft.
 
 /* ===================== Panel derecho ===================== */
 let tab="insp";
-document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
-  tab=b.dataset.tab; document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("on",x===b)); renderPanel();
-  if(document.body.classList.contains("mobile")&&sheetState==="peek") setSheet("mid"); });
+function abrirTab(t){ tab=t;
+  document.querySelectorAll(".tabs button").forEach(x=>x.classList.toggle("on",x.dataset.tab===t));
+  renderPanel();
+  if(document.body.classList.contains("mobile")&&sheetState==="peek") setSheet("mid"); }
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>abrirTab(b.dataset.tab));
 
 function renderPanel(){ const p=document.getElementById("panelbody");
+  updateCotBadge();
   if(tab==="layers") return renderLayers(p);
   if(tab==="cot") return renderCot(p);
   if(tab==="cir") return renderCircuits(p);
@@ -2040,38 +2088,39 @@ function renderLayers(p){ const L=[["fondo","🖼 Fondo de calco"],["structure",
     settings["layer_"+cb.dataset.lyr]=cb.checked; applyLayers(); scheduleSave(); });
 }
 
-function renderCot(p){
-  const M=settings.moneda;
-  // materiales por elemento
+// totales de cotización — única fuente de verdad (la usan renderCot, badge y toast)
+function cotTotales(){
   const elemCount={}; doc.elements.forEach(e=>elemCount[e.type]=(elemCount[e.type]||0)+1);
   const elemCost=doc.elements.reduce((s,e)=>s+priceOf(e.type),0);
-  // cable por circuito
-  let cableTotal=0; const cirRows=doc.circuits.map(c=>{ const m=circuitCableM(c); cableTotal+=m;
-    return `<tr><td><span style="color:${c.color}">⬤</span> ${c.name} (${c.amps}A · ${AWG_BY_BREAKER[c.amps]||"?"})</td><td class="n">${circuitPoints(c)} pts</td><td class="n">${m.toFixed(1)} m</td></tr>`; }).join("");
+  let cableTotal=0; doc.circuits.forEach(c=>cableTotal+=circuitCableM(c));
   const cableCost=cableTotal*settings.precioCableM;
-  // mano de obra por punto
   const puntos=doc.elements.filter(e=>e.type!=="panel").length;
   const manoObra=puntos*settings.precioPunto;
   const tubM=doc.routes.reduce((s,r)=>s+routeLen(r)/CM_PER_M,0);
   const tubCost=tubM*(settings.precioTuboM||0);
-  const total=elemCost+cableCost+manoObra+tubCost;
-  const erows=Object.keys(elemCount).map(k=>`<tr><td>${elInfo(k).icon} ${elInfo(k).name}</td><td class="n">${elemCount[k]}×</td><td class="n">${mon(elemCount[k]*priceOf(k))}</td></tr>`).join("");
+  return {elemCount,elemCost,cableTotal,cableCost,puntos,manoObra,tubM,tubCost,
+    items:doc.elements.length,total:elemCost+cableCost+manoObra+tubCost};
+}
+
+function renderCot(p){
+  const M=settings.moneda;
+  const T=cotTotales();
+  const {elemCount,elemCost,cableTotal,cableCost,puntos,manoObra,tubM,tubCost,total}=T;
+  const cirRows=doc.circuits.map(c=>{ const m=circuitCableM(c);
+    return `<tr><td><span style="color:${c.color}">⬤</span> ${c.name} (${c.amps}A · ${AWG_BY_BREAKER[c.amps]||"?"})</td><td class="n">${circuitPoints(c)} pts</td><td class="n">${m.toFixed(1)} m</td></tr>`; }).join("");
+  const erows=Object.keys(elemCount).map(k=>{ const i=elInfo(k);
+    return `<div class="cartrow"><span class="ci">${i.icon}</span>
+      <div class="cn">${i.name}<small>${mon(priceOf(k))} c/u</small></div>
+      <span class="cq">×${elemCount[k]}</span>
+      <input data-price="${k}" type="number" step="0.01" value="${priceOf(k)}" title="Precio unitario (${M}) — todos los ${i.name} de este proyecto">
+      <b class="cs">${mon(elemCount[k]*priceOf(k))}</b></div>`; }).join("");
   const usados=Object.keys(elemCount);
   const catRows=usados.map(k=>`<tr><td>${elInfo(k).icon} ${elInfo(k).name}</td>
     <td class="n"><input data-price="${k}" type="number" value="${priceOf(k)}" style="width:92px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;color:var(--ink);padding:3px 6px;text-align:right"></td></tr>`).join("");
-  p.innerHTML=`<div class="kdt" style="margin-bottom:8px">Parámetros</div>
-    <div class="row" style="margin-bottom:10px">
-      <div class="field" style="margin:0"><label>Moneda</label><select id="c_mon"><option value="₡" ${M==="₡"?"selected":""}>₡ colones</option><option value="$" ${M==="$"?"selected":""}>$ dólares</option></select></div>
-      <div class="field" style="margin:0"><label>${M}/punto (mano obra)</label><input id="c_pp" type="number" value="${settings.precioPunto}"></div>
-    </div>
-    <div class="row" style="margin-bottom:10px">
-      <div class="field" style="margin:0"><label>${M}/m cable</label><input id="c_pc" type="number" step="0.1" value="${settings.precioCableM}"></div>
-      <div class="field" style="margin:0"><label>% desperd.</label><input id="c_dp" type="number" value="${settings.desperdicio}"></div>
-      <div class="field" style="margin:0"><label>${M}/m tubo</label><input id="c_pt" type="number" step="0.1" value="${settings.precioTuboM}"></div>
-    </div>
-    <div class="kdt" style="margin:10px 0 8px">Materiales del plano</div>
-    <table class="cot"><tbody>${erows||'<tr><td class="muted">Sin elementos</td></tr>'}</tbody></table>
-    <div class="kdt" style="margin:14px 0 8px">Cable por circuito (estimación)</div>
+  p.innerHTML=`<div class="cottotal"><span class="kdt">🧾 ${T.items} producto${T.items===1?"":"s"} · ${puntos} pts</span><b>${mon(total)}</b></div>
+    <div class="kdt" style="margin:2px 0 8px">🧾 Productos del plano</div>
+    <div>${erows||'<div class="muted" style="padding:10px 0">Carrito vacío — tocá 🔌 💡 🎚️ en la barra y tocá el plano para añadir productos.</div>'}</div>
+    <div class="kdt" style="margin:14px 0 8px">🔧 Servicios estimados — cable por circuito</div>
     <table class="cot"><tbody>${cirRows||'<tr><td colspan="3" class="muted">Sin circuitos — créalos en ⚡ Circuitos</td></tr>'}
     ${cirRows?`<tr><td><b>Cable total</b></td><td></td><td class="n"><b>${cableTotal.toFixed(1)} m · ${mon(cableCost)}</b></td></tr>`:""}</tbody></table>
     <div class="kdt" style="margin:14px 0 8px">Resumen</div>
@@ -2081,6 +2130,16 @@ function renderCot(p){
       ${tubM>0?`<tr><td>Tubería dibujada (${tubM.toFixed(1)} m ≈ ${Math.ceil(tubM/3)} tubos de 3 m)</td><td></td><td class="n">${mon(tubCost)}</td></tr>`:""}
       <tr><td>Mano de obra (${puntos} puntos × ${mon(settings.precioPunto)})</td><td></td><td class="n">${mon(manoObra)}</td></tr>
     </tbody><tfoot><tr><td>TOTAL</td><td></td><td class="n">${mon(total)}</td></tr></tfoot></table>
+    <div class="kdt" style="margin:14px 0 8px">⚙ Parámetros</div>
+    <div class="row" style="margin-bottom:10px">
+      <div class="field" style="margin:0"><label>Moneda</label><select id="c_mon"><option value="₡" ${M==="₡"?"selected":""}>₡ colones</option><option value="$" ${M==="$"?"selected":""}>$ dólares</option></select></div>
+      <div class="field" style="margin:0"><label>${M}/punto (mano obra)</label><input id="c_pp" type="number" value="${settings.precioPunto}"></div>
+    </div>
+    <div class="row" style="margin-bottom:10px">
+      <div class="field" style="margin:0"><label>${M}/m cable</label><input id="c_pc" type="number" step="0.1" value="${settings.precioCableM}"></div>
+      <div class="field" style="margin:0"><label>% desperd.</label><input id="c_dp" type="number" value="${settings.desperdicio}"></div>
+      <div class="field" style="margin:0"><label>${M}/m tubo</label><input id="c_pt" type="number" step="0.1" value="${settings.precioTuboM}"></div>
+    </div>
     <details style="margin-top:12px"><summary style="cursor:pointer;color:var(--accent);font-weight:700;font-size:12.5px;padding:9px;border:1px dashed var(--accent);border-radius:8px;text-align:center;list-style:none">✎ CATÁLOGO DE PRECIOS DE ESTE PROYECTO (${M})</summary>
       <table class="cot" style="margin-top:8px"><tbody>${catRows||`<tr><td class="muted">Coloca elementos en el plano y aparecerán aquí para ponerles precio.</td></tr>`}</tbody></table>
       <button id="catReset" class="ghost" style="width:100%;justify-content:center;margin-top:6px;min-height:30px">↺ Restaurar precios de fábrica</button>
@@ -2128,6 +2187,16 @@ function renderFloorbar(){ const fb=document.getElementById("floorbar"); if(!fb)
 function renderStatus(){ const s=document.getElementById("status");
   s.innerHTML=`<span>zoom ${(100/vb.w*1400|0)/1}%</span><span>paredes ${doc.walls.length}</span><span>ref 1ª: ${doc.walls.length?fmt(wallLen(doc.walls[0])):"—"}</span>${(doc.pisos&&doc.pisos.length>1)?`<span>🏢 ${((doc.pisos.find(p=>p.id===doc.pisoActivo)||{}).nombre)||""}</span>`:""}
   <span>escala 1px≈${(1/scale).toFixed(1)}cm</span><span>${storageOK?"autosave ✓":"memoria"}</span>`; }
+
+// badge del carrito en la pestaña Cotización — se actualiza en cada render (con guard de firma)
+let _cotSig="";
+function updateCotBadge(){ const b=document.getElementById("cotBadge"); if(!b) return;
+  const t=cotTotales(); const sig=t.items+"|"+Math.round(t.total);
+  if(sig===_cotSig) return;
+  const crecio=+(_cotSig.split("|")[0]||0)<t.items; _cotSig=sig;
+  b.hidden=!t.items; b.textContent=t.items>99?"99+":t.items;
+  b.title="Total estimado: "+mon(t.total);
+  if(crecio){ b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop"); } }
 
 /* ===================== XP ===================== */
 function addXP(n){ xp+=n; }
@@ -2303,6 +2372,18 @@ function pedirOpcion(titulo,ops){ return new Promise(res=>{
 function avisar(msg){ const d=document.createElement("div");
   d.style.cssText="position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--accent);color:var(--ink);padding:10px 16px;border-radius:10px;z-index:120;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:82%;text-align:center";
   d.textContent=msg; document.body.appendChild(d); setTimeout(()=>d.remove(),3400); }
+
+// toast del carrito: singleton (las altas en ráfaga actualizan el MISMO aviso) y tocable → abre la cotización
+let _cartToast=null,_cartTimer=0;
+function avisarCot(msg){
+  if(!_cartToast||!_cartToast.isConnected){ _cartToast=document.createElement("div");
+    _cartToast.id="cartToast";
+    _cartToast.style.cssText="position:fixed;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--accent);color:var(--ink);padding:10px 16px;border-radius:10px;z-index:120;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:82%;text-align:center;cursor:pointer";
+    _cartToast.onclick=()=>{ _cartToast.remove(); abrirTab("cot"); if(document.body.classList.contains("mobile")) setSheet("mid"); };
+    document.body.appendChild(_cartToast); }
+  _cartToast.style.bottom=document.body.classList.contains("mobile")?"calc(76px + env(safe-area-inset-bottom))":"26px";
+  _cartToast.innerHTML=msg+' <span style="color:var(--accent);font-weight:700">· Ver 🧾</span>';
+  clearTimeout(_cartTimer); _cartTimer=setTimeout(()=>{ if(_cartToast) _cartToast.remove(); },2600); }
 
 /* ===================== Bloques reutilizables (viajan entre proyectos) ===================== */
 function loadBlocks(){ try{ return JSON.parse(lsGet("planelectrico:blocks"))||[]; }catch(e){ return []; } }
@@ -2488,6 +2569,54 @@ function showTutorial(){
 }
 
 /* ===================== Barra de herramientas ===================== */
+/* ===== Arrastre de fichas desde la bandeja (estilo Duolingo) ===== */
+let dragFicha=null; // {cat,btn,id,x0,y0,activo}
+const GH_OFF=36;    // el ghost va 36px sobre el dedo/cursor para que se vea el punto de caída
+function ghostEl(){ return document.getElementById("dragGhost"); }
+function mostrarGhost(cat){ const g=ghostEl();
+  const et=(settings.varByCat[cat]&&CATS[cat].includes(settings.varByCat[cat]))?settings.varByCat[cat]:CATS[cat][0];
+  const i=elInfo(et);
+  g.innerHTML=`<span class="ic">${i.icon}</span><span>${i.name.split(" ")[0]}</span>`;
+  g.className=""; g.style.display="flex"; }
+function moverGhost(ev){ const g=ghostEl();
+  g.style.left=ev.clientX+"px"; g.style.top=(ev.clientY-GH_OFF)+"px";
+  const bajo=document.elementFromPoint(ev.clientX,Math.max(0,ev.clientY-GH_OFF));
+  const sobre=!!(bajo&&(bajo===svg||svg.contains(bajo)));
+  g.classList.toggle("sobre",sobre);
+  if(sobre){ const w=toWorld({clientX:ev.clientX,clientY:ev.clientY-GH_OFF});
+    hoverSnap={x:snapNum(w.x),y:snapNum(w.y)}; render(true); }
+  else if(hoverSnap){ hoverSnap=null; render(true); } }
+function soltarFicha(ev,cancelado){
+  const df=dragFicha; dragFicha=null; if(!df||!df.activo) return; // tap simple → click normal
+  df.btn.__suprimeClick=true;
+  const g=ghostEl();
+  const bajo=document.elementFromPoint(ev.clientX,Math.max(0,ev.clientY-GH_OFF));
+  if(!cancelado&&bajo&&(bajo===svg||svg.contains(bajo))){
+    const w=toWorld({clientX:ev.clientX,clientY:ev.clientY-GH_OFF});
+    hoverSnap=null; colocarElemento(df.cat,{x:snapNum(w.x),y:snapNum(w.y)});
+    try{ navigator.vibrate&&navigator.vibrate(12); }catch(e){}
+    g.classList.add("suelta"); setTimeout(()=>{ g.style.display="none"; g.className=""; },160);
+  } else { // regresa a la bandeja (cancelación clara)
+    const r=df.btn.getBoundingClientRect();
+    g.classList.add("vuelve");
+    g.style.left=(r.left+r.width/2)+"px"; g.style.top=(r.top+r.height/2)+"px";
+    hoverSnap=null; render(true);
+    setTimeout(()=>{ g.style.display="none"; g.className=""; },200); } }
+function activarDragFicha(btn,cat){
+  btn.classList.add("ficha");
+  btn.addEventListener("pointerdown",ev=>{
+    dragFicha={cat,btn,id:ev.pointerId,x0:ev.clientX,y0:ev.clientY,activo:false};
+    try{ btn.setPointerCapture(ev.pointerId); }catch(e){} });
+  btn.addEventListener("pointermove",ev=>{
+    if(!dragFicha||dragFicha.id!==ev.pointerId) return;
+    if(!dragFicha.activo){
+      if(Math.hypot(ev.clientX-dragFicha.x0,ev.clientY-dragFicha.y0)<10) return;
+      dragFicha.activo=true; mostrarGhost(cat);
+      try{ navigator.vibrate&&navigator.vibrate(8); }catch(e){} }
+    ev.preventDefault(); moverGhost(ev); });
+  btn.addEventListener("pointerup",ev=>soltarFicha(ev,false));
+  btn.addEventListener("pointercancel",ev=>soltarFicha(ev,true)); }
+
 const TOOLS=[["select","⬈","Sel"],["wall","／","Pared"],["room","▭","Cuarto"],
   ["door","🚪","Puerta"],["window","🪟","Ventana"],["dim","↔","Cota"],["label","🔖","Espacio"],
   ["sep"],["toma","🔌","Tomas"],["lampara","💡","Luces"],["interruptor","🎚️","Apagad."],["extra","🔔","Más"],["equipo","🚿","Equipos"],["panel","⚡","Tablero"],["route","〰️","Tubo"],["photo","📷","Foto"],["stair","🪜","Escalera"],
@@ -2495,7 +2624,10 @@ const TOOLS=[["select","⬈","Sel"],["wall","／","Pared"],["room","▭","Cuarto
 const rail=document.getElementById("rail");
 TOOLS.forEach(t=>{ if(t[0]==="sep"){ const s=document.createElement("div"); s.className="sep"; rail.appendChild(s); return; }
   const b=document.createElement("button"); b.className="tool ghost"; b.dataset.tool=t[0];
-  b.innerHTML=`<span class="ic">${t[1]}</span><span>${t[2]}</span>`; b.onclick=()=>setTool(t[0]); rail.appendChild(b); });
+  b.innerHTML=`<span class="ic">${t[1]}</span><span>${t[2]}</span>`;
+  b.onclick=()=>{ if(b.__suprimeClick){ b.__suprimeClick=false; return; } setTool(t[0]); };
+  if(CATS[t[0]]) activarDragFicha(b,t[0]); // las categorías eléctricas también se arrastran al plano
+  rail.appendChild(b); });
 
 /* ===================== Controles top ===================== */
 document.getElementById("undo").onclick=undo;
@@ -2905,6 +3037,8 @@ async function abrirMenuMovil(){
 document.getElementById("menuMovil").onclick=abrirMenuMovil;
 document.getElementById("fabU").onclick=undo;
 document.getElementById("fabR").onclick=redo;
+document.getElementById("fabOK").onclick=finishDraft;
+document.getElementById("fabX").onclick=()=>{ draft=null; setSel([]); pruneNodes(); updateHint(); render(); };
 // asa del bottom sheet: tap alterna, arrastre sube/baja
 (function(){ const h=document.getElementById("sheethandle"); if(!h)return;
   let y0=null,st0=null;
