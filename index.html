@@ -57,9 +57,16 @@
     display:flex;flex-direction:column;gap:4px;padding:8px 6px;overflow-y:auto;flex:none;}
   .tool{width:52px;height:52px;flex:none;border-radius:9px;flex-direction:column;gap:2px;
     font-size:10px;line-height:1;padding:4px;color:var(--soft);}
-  .tool .ic{font-size:19px;}
+  .tool .ic{font-size:19px;transition:transform .14s ease;}
   .tool.on{color:#fff;}
   .rail .sep{height:1px;background:var(--line);margin:4px 4px;}
+  /* Hover en el rail: el ícono crece y se resalta para verlo bien (solo con mouse real, nunca en táctil) */
+  @media (hover:hover){
+    .tool{transition:background .14s ease,color .14s ease;}
+    .tool:hover{background:var(--panel2);color:var(--ink);}
+    .tool:hover .ic{transform:scale(1.55);}
+    .tool.on:hover{color:#fff;}
+  }
 
   /* Stage */
   .stagewrap{flex:1;position:relative;min-width:0;background:var(--stage);overflow:hidden;}
