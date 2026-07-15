@@ -1,5 +1,5 @@
 // PlanEléctrico Pro — service worker (cache-first, offline total)
-const C="planelectrico-v23";
+const C="planelectrico-v24";
 const SHELL=["./","./index.html","./manifest.webmanifest","./icon-192.png","./icon-512.png","./apple-touch-icon.png"];
 self.addEventListener("install",e=>{
   e.waitUntil(caches.open(C).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()));

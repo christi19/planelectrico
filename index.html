@@ -1,5 +1,5 @@
 <title>PlanEléctrico Pro — Editor de planos</title>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes,viewport-fit=cover">
 <meta name="theme-color" content="#0e1e39">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1533,10 +1533,13 @@ function endTouch(ev){
 window.addEventListener("pointerup",endTouch,true);
 window.addEventListener("pointercancel",endTouch,true);
 window.addEventListener("blur",()=>{ tPointers.clear(); pinch=null; wasPinch=false; smartGuides.length=0; });
-// --- iOS Safari IGNORA user-scalable=no: matar el zoom de PÁGINA nativo (era lo que agrandaba TODA la UI) ---
-// El pinch propio del lienzo (pointer events, arriba) queda intacto: sólo se cancela la magnificación de WebKit.
+// --- Zoom nativo (pellizco) SOLO fuera del lienzo ---
+// En barras/paneles la letra es pequeña: dejamos que el pinch haga zoom nativo de página para poder leerla.
+// Sobre el lienzo/3D sí cancelamos el zoom nativo, para que su propio pinch (pointer events) no se duplique con la magnificación de WebKit.
 ["gesturestart","gesturechange","gestureend"].forEach(t=>{
-  document.addEventListener(t,e=>{ e.preventDefault(); },{passive:false});
+  document.addEventListener(t,e=>{
+    if(e.target&&e.target.closest&&e.target.closest("#canvas,#view3d")) e.preventDefault();
+  },{passive:false});
 });
 
 // --- doble tap = acercar · long-press = info del elemento (táctil) ---
