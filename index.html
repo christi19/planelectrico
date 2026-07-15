@@ -2919,6 +2919,62 @@ function showTutorial(){
   m.querySelector("#tutoOk").onclick=()=>{ settings.tutoVisto=true; scheduleSave(); m.remove(); };
 }
 
+/* ===================== Instalar como app (PWA) ===================== */
+let deferredInstall=null; // evento beforeinstallprompt capturado (Android/Chrome/Edge)
+function showInstallPrompt(){
+  try{
+    if(!esMovil()) return;                                   // el mensaje es "en el celular"
+    if(settings.instalarVisto) return;                       // ya lo descartó o ya la instaló
+    if(document.getElementById("installBanner")) return;     // ya visible
+    const standalone=(window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||navigator.standalone===true;
+    if(standalone) return;                                    // ya abierta como app: no molestar
+    const iOS=/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+    if(!iOS && !deferredInstall) return;                     // Android: esperar a que el sistema ofrezca instalar
+    if(document.getElementById("tutomodal")){ setTimeout(showInstallPrompt,1200); return; } // no chocar con el tutorial
+    const reduce=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const share='<svg viewBox="0 0 24 24" width="17" height="17" style="vertical-align:-3px" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>';
+    const b=document.createElement("div"); b.id="installBanner";
+    b.style.cssText="position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translate(-50%,14px);width:min(420px,92vw);background:var(--panel);border:1px solid var(--line2);border-radius:16px;z-index:130;box-shadow:0 14px 44px rgba(0,0,0,.55);padding:16px 16px 14px;opacity:0;"+(reduce?"":"transition:opacity .25s ease, transform .25s ease");
+    const cerrar='<button id="instClose" aria-label="Cerrar" class="ghost" style="flex:0 0 auto;align-self:flex-start;padding:3px 9px;font-size:15px;line-height:1;border-radius:9px">✕</button>';
+    if(iOS){
+      b.innerHTML='<div style="display:flex;gap:12px">'
+        +'<div style="font-size:30px;line-height:1;flex:0 0 auto">⚡</div>'
+        +'<div style="flex:1;min-width:0">'
+          +'<div style="font-weight:800;font-size:15px">Agregá la app a tu iPhone/iPad</div>'
+          +'<div style="color:var(--soft);font-size:12.5px;line-height:1.6;margin-top:5px">'
+            +'1. Tocá <b>Compartir</b> '+share+' en la barra de Safari<br>'
+            +'2. Elegí <b>«Agregar a inicio»</b> ➕</div>'
+        +'</div>'+cerrar+'</div>'
+        +'<button id="instOk" style="width:100%;justify-content:center;margin-top:12px;font-weight:800">Entendido</button>';
+    } else {
+      b.innerHTML='<div style="display:flex;gap:12px;align-items:center">'
+        +'<div style="font-size:30px;line-height:1;flex:0 0 auto">⚡</div>'
+        +'<div style="flex:1;min-width:0">'
+          +'<div style="font-weight:800;font-size:15px">Instalá la app en tu celular</div>'
+          +'<div style="color:var(--soft);font-size:12.5px;line-height:1.45;margin-top:2px">Se abre como una app normal y funciona sin internet.</div>'
+        +'</div>'+cerrar+'</div>'
+        +'<div style="display:flex;gap:8px;margin-top:12px">'
+          +'<button id="instNo" class="ghost" style="flex:1;justify-content:center">Ahora no</button>'
+          +'<button id="instYes" style="flex:2;justify-content:center;font-weight:800">📲 Instalar</button>'
+        +'</div>';
+    }
+    document.body.appendChild(b);
+    requestAnimationFrame(()=>{ b.style.opacity="1"; b.style.transform="translate(-50%,0)"; });
+    const cerrarBanner=recordar=>{ if(recordar){ settings.instalarVisto=true; scheduleSave(); }
+      b.style.opacity="0"; b.style.transform="translate(-50%,14px)"; setTimeout(()=>b.remove(),reduce?0:250); };
+    const bx=id=>b.querySelector(id);
+    if(bx("#instClose")) bx("#instClose").onclick=()=>cerrarBanner(true);
+    if(bx("#instNo"))    bx("#instNo").onclick=()=>cerrarBanner(true);
+    if(bx("#instOk"))    bx("#instOk").onclick=()=>cerrarBanner(true);
+    if(bx("#instYes"))   bx("#instYes").onclick=async ()=>{
+      const dp=deferredInstall; if(!dp){ cerrarBanner(true); return; }
+      cerrarBanner(true); deferredInstall=null;
+      try{ dp.prompt(); const r=await dp.userChoice;
+        if(r&&r.outcome==="accepted") avisar("¡Listo! La app se está instalando 📲"); }catch(e){}
+    };
+  }catch(e){}
+}
+
 /* ===================== Barra de herramientas ===================== */
 /* ===== Arrastre de fichas desde la bandeja (estilo Duolingo) ===== */
 let dragFicha=null; // {cat,btn,id,x0,y0,activo}
@@ -3523,12 +3579,20 @@ try{ if("serviceWorker" in navigator && location.protocol.indexOf("http")===0 &&
   !/claude|anthropic|usercontent|localhost/i.test(location.hostname)){
   navigator.serviceWorker.register("sw.js").catch(function(){}); } }catch(e){}
 
+// PWA: ofrecer "Instalar en el celular" (Android dispara beforeinstallprompt; iOS se ofrece a mano)
+try{
+  window.addEventListener("beforeinstallprompt",function(ev){ ev.preventDefault(); deferredInstall=ev; showInstallPrompt(); });
+  window.addEventListener("appinstalled",function(){ settings.instalarVisto=true; scheduleSave();
+    var b=document.getElementById("installBanner"); if(b)b.remove(); });
+}catch(e){}
+
 // init
 if(!loadSaved()){ seed(); projectId=newProjectId(); projectName="Casa de ejemplo"; }
 normalizeDoc(doc);
 aplicarModo();
 setTool("select");
 requestAnimationFrame(()=>{ updateScale(); fitView(); history=[snap()]; hi=0; updateProjLabel(); render(); scheduleSave();
-  if(!settings.tutoVisto) showTutorial(); });
+  if(!settings.tutoVisto) showTutorial();
+  setTimeout(showInstallPrompt, settings.tutoVisto?1500:3000); }); // iOS y Android-si-ya-disparó; espera al tutorial
 })();
 </script>
