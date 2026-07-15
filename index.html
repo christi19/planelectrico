@@ -236,7 +236,6 @@
     font-family:var(--mono);font-size:11px;color:var(--soft);display:flex;gap:16px;flex-wrap:wrap;}
 
   /* ===== MÓVIL (body.mobile — lo decide JS: táctil + ancho) ===== */
-  .mtoggle{display:none!important;}
   .sheethandle{display:none;}
   .fabs{display:none;}
   html,body{overscroll-behavior:none;}
@@ -275,6 +274,14 @@
   body.mobile .sheethandle{display:block;height:16px;cursor:grab;touch-action:none;}
   body.mobile .sheethandle i{display:block;width:44px;height:5px;border-radius:3px;
     background:var(--line2);margin:6px auto 0;}
+  /* Barra "Editar ▲": aparece en peek cuando hay algo seleccionado, sin tapar el plano */
+  .sheethint{display:none;}
+  body.mobile .side.hassel:not(.mid):not(.full){height:calc(112px + env(safe-area-inset-bottom));}
+  body.mobile .side.hassel:not(.mid):not(.full) .sheethint{display:flex;align-items:center;
+    justify-content:center;gap:8px;width:calc(100% - 24px);margin:0 12px 8px;padding:10px 12px;
+    border-radius:11px;background:var(--blue);border:1px solid var(--blue);color:#fff;
+    font-size:13.5px;font-weight:600;box-shadow:0 3px 12px rgba(0,0,0,.28);cursor:pointer;}
+  body.mobile .side.hassel:not(.mid):not(.full) .sheethint b{font-weight:800;}
   body.mobile .tabs{overflow-x:auto;}
   body.mobile .tabs button{white-space:nowrap;flex:none;padding:0 16px;min-height:38px;}
   body.mobile .tabs::-webkit-scrollbar{display:none;}
@@ -323,7 +330,6 @@
   </div>
   <div class="save" id="saveInd"><span class="led"></span><span id="saveTxt">Guardado</span></div>
   <button id="menuMovil" class="ghost" style="display:none" title="Menú">⋮</button>
-  <button class="mtoggle ghost" id="mtoggle">☰</button>
   <input type="file" id="fileInput" accept="application/json" style="display:none">
   <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
   <input type="file" id="fondoInput" accept="image/*" style="display:none">
@@ -361,6 +367,7 @@
 
   <div class="side" id="side">
     <div class="sheethandle" id="sheethandle"><i></i></div>
+    <button class="sheethint" id="sheethint">▲ Editar <b></b></button>
     <div class="tabs">
       <button data-tab="insp" class="on">Inspector</button>
       <button data-tab="cir">⚡ Circuitos</button>
@@ -412,14 +419,24 @@ const ELEMENTS={
   ac:{icon:"❄️",name:"A/C mini-split 220V",price:{"$":0,"₡":0},va:1800,volt:240,dedicado:true,brkAmp:20,brkTxt:"2×20 A · #12"},
   bomba:{icon:"💧",name:"Bomba de agua",price:{"$":110,"₡":85000},va:750,dedicado:true,brkAmp:20,brkTxt:"1×20 A · #12"},
   // tablero
-  panel:     {icon:"⚡", name:"Tablero",            price:{"$":120,"₡":55000},va:0}
+  panel:     {icon:"⚡", name:"Tablero",            price:{"$":120,"₡":55000},va:0},
+  // muebles (decorativos: solo visuales; no cuentan como punto eléctrico ni cotizan)
+  mueble_sofa:   {icon:"🛋️", name:"Sofá / sillón",  price:{"$":0,"₡":0}, va:0, decorativo:true},
+  mueble_cama:   {icon:"🛏️", name:"Cama",           price:{"$":0,"₡":0}, va:0, decorativo:true},
+  mueble_mesa:   {icon:"🍽️", name:"Mesa / comedor", price:{"$":0,"₡":0}, va:0, decorativo:true},
+  mueble_silla:  {icon:"🪑", name:"Silla",           price:{"$":0,"₡":0}, va:0, decorativo:true},
+  mueble_inodoro:{icon:"🚽", name:"Inodoro",         price:{"$":0,"₡":0}, va:0, decorativo:true},
+  mueble_lavabo: {icon:"🚰", name:"Lavabo / pila",   price:{"$":0,"₡":0}, va:0, decorativo:true},
+  mueble_tina:   {icon:"🛁", name:"Bañera / tina",   price:{"$":0,"₡":0}, va:0, decorativo:true},
+  mueble_closet: {icon:"🗄️", name:"Clóset / ropero", price:{"$":0,"₡":0}, va:0, decorativo:true}
 };
 const CATS={ toma:["toma","toma_doble","toma_220","toma_gfci"],
   lampara:["lampara","plafon","spot","aplique"],
   interruptor:["interruptor","sw_doble","sw_triple","sw_3vias"],
   extra:["timbre","tv","datos","abanico"],
   equipo:["termoducha","cocina220","refri","lavadora","secadora","ac","bomba"],
-  panel:["panel"] };
+  panel:["panel"],
+  mueble:["mueble_sofa","mueble_cama","mueble_mesa","mueble_silla","mueble_inodoro","mueble_lavabo","mueble_tina","mueble_closet"] };
 const HANGING=["lampara","plafon","spot","abanico"]; // cuelgan del cielo en 3D
 const SWITCH_TYPES=["interruptor","sw_doble","sw_triple","sw_3vias"];
 const LIGHT_TYPES=["lampara","plafon","spot","abanico","aplique"];
@@ -432,6 +449,8 @@ function alturaOf(e){ return e.alturaCm!=null?e.alturaCm:(ALTURA_DEF[e.type]!=nu
 const DEF_MONEDA={ "$":{punto:25,cable:0.8,tubo:1.2}, "₡":{punto:15000,cable:400,tubo:570} };
 const EL_UNK={icon:String.fromCodePoint(0x2753),name:"Desconocido",price:{"$":0,"₡":0},va:0};
 function elInfo(t){ return ELEMENTS[t]||EL_UNK; }
+// Un elemento "eléctrico" es todo lo que cuenta como punto/carga: ni el tablero ni los muebles decorativos.
+function esElectrico(e){ return !!e && e.type!=="panel" && !elInfo(e.type).decorativo; }
 function priceOf(t){ if(doc&&doc.precios&&doc.precios[t]!=null) return doc.precios[t];
   return (settings.precios&&settings.precios[t]!=null)?settings.precios[t]:(elInfo(t).price[settings.moneda]!=null?elInfo(t).price[settings.moneda]:0); }
 function mon(n){ return settings.moneda==="₡" ? "₡"+Math.round(n).toLocaleString("es-CR") : "$"+Math.round(n).toLocaleString("en-US"); }
@@ -508,7 +527,7 @@ function circuitCableM(c){
     return (cm/CM_PER_M)*(1+settings.desperdicio/100); }
   const p=panelPos(); if(!p) return 0;
   const pe=doc.elements.find(e=>e.type==="panel"); const pfl=pisoIdx(pe&&pe.piso);
-  let cm=0; doc.elements.filter(e=>e.circuitId===c.id && e.type!=="panel").forEach(e=>{
+  let cm=0; doc.elements.filter(e=>e.circuitId===c.id && esElectrico(e)).forEach(e=>{
     cm += Math.abs(e.x-p.x)+Math.abs(e.y-p.y) + 400 + 260*Math.abs(pisoIdx(e.piso)-pfl); });
   return (cm/CM_PER_M)*(1+settings.desperdicio/100); }
 function addCircuit(name,amps){ const c={id:uid("c"),name:name||("Circuito "+(doc.circuits.length+1)),
@@ -752,8 +771,30 @@ let fondoURL=null, fondoLoading=false;
 function isSelected(t,id){ return selection.some(s=>s.type===t&&s.id===id); }
 function setSel(arr){ selection=arr; selected=arr.length===1?arr[0]:null;
   try{ if(document.body.classList.contains("mobile")){
-    if(arr.length&&sheetState==="peek") setSheet("mid");
-    else if(!arr.length&&sheetState!=="peek") setSheet("peek"); } }catch(e){} }
+    // Ya NO sube solo al seleccionar (tapaba el plano). Al deseleccionar sí vuelve a peek.
+    if(!arr.length&&sheetState!=="peek") setSheet("peek");
+    actualizarSheetHint(); } }catch(e){} }
+// Nombre legible del objeto seleccionado, para la barra "Editar ▲" en móvil.
+function nombreSel(){
+  if(selection.length>1) return selection.length+" objetos";
+  const s=selected; if(!s) return "";
+  if(s.type==="wall") return "Pared";
+  if(s.type==="element"){ const e=doc.elements.find(x=>x.id===s.id); return e?elInfo(e.type).name:"Elemento"; }
+  if(s.type==="opening"){ const o=doc.openings.find(x=>x.id===s.id); return o?(o.kind==="door"?"Puerta":"Ventana"):"Apertura"; }
+  if(s.type==="label") return "Espacio";
+  if(s.type==="text") return "Texto";
+  if(s.type==="photo") return "Foto";
+  if(s.type==="stair") return "Escalera";
+  if(s.type==="route") return "Tubo";
+  if(s.type==="dim") return "Cota";
+  return "Objeto";
+}
+function actualizarSheetHint(){
+  const side=document.getElementById("side"), h=document.getElementById("sheethint"); if(!side||!h) return;
+  const mostrar=document.body.classList.contains("mobile")&&sheetState==="peek"&&selection.length>0;
+  side.classList.toggle("hassel",mostrar);
+  if(mostrar){ const nb=h.querySelector("b"); if(nb) nb.textContent=nombreSel(); }
+}
 function toggleSel(t,id){ const i=selection.findIndex(s=>s.type===t&&s.id===id);
   if(i>=0) selection.splice(i,1); else selection.push({type:t,id});
   selected=selection.length===1?selection[0]:null; }
@@ -1918,7 +1959,7 @@ function renderInspector(p){
   if(selection.length>1){
     const cnt={}; selection.forEach(s=>cnt[s.type]=(cnt[s.type]||0)+1);
     const selElems=selection.filter(s=>s.type==="element")
-      .map(s=>doc.elements.find(e=>e.id===s.id)).filter(e=>e&&e.type!=="panel");
+      .map(s=>doc.elements.find(e=>e.id===s.id)).filter(e=>esElectrico(e));
     const cirOpts=`<option value="">— elegir circuito —</option>`+
       doc.circuits.map(c=>`<option value="${c.id}">⬤ ${c.name} · ${c.amps}A</option>`).join("")+
       `<option value="__new__">＋ Nuevo circuito…</option>`;
@@ -1943,7 +1984,7 @@ function renderInspector(p){
     <p class="muted">Paredes: <b>${doc.walls.length}</b> · Aperturas: <b>${doc.openings.length}</b> · Elementos: <b>${doc.elements.length}</b> · Espacios: <b>${doc.labels.length}</b><br>Área de esta planta: <b>${(detectRooms().reduce((s,r)=>s+r.area,0)/10000).toFixed(1)} m²</b> · Escaleras: <b>${(doc.stairs||[]).filter(enPiso).length}</b></p>`;
     // Biblioteca de símbolos buscable (Illustrator Symbols / Canva Elements)
     const cat4={}; Object.keys(CATS).forEach(c=>CATS[c].forEach(t=>cat4[t]=c));
-    const item=k=>{ const i=ELEMENTS[k]; return `<button data-sym="${k}" title="${i.name} — ${mon(priceOf(k))}"><span>${i.icon}</span><small>${i.name}</small></button>`; };
+    const item=k=>{ const i=ELEMENTS[k]; return `<button data-sym="${k}"><span>${i.icon}</span><small>${i.name}</small></button>`; };
     const lista=q=>{ q=(q||"").toLowerCase();
       const ks=Object.keys(ELEMENTS).filter(k=>cat4[k]&&(!q||ELEMENTS[k].name.toLowerCase().includes(q)||k.includes(q)));
       return ks.length?ks.map(item).join(""):`<p class="muted" style="grid-column:1/-1">Sin resultados…</p>`; };
@@ -1958,6 +1999,9 @@ function renderInspector(p){
       const t2=b.dataset.sym, c2=cat4[t2]; if(!c2) return;
       settings.varByCat[c2]=t2; scheduleSave(); setTool(c2);
       avisar(ELEMENTS[t2].icon+" "+ELEMENTS[t2].name+" — tocá el plano para colocarlo."); };
+    // tooltip flotante estilizado (#tip) al pasar el cursor por una ficha — reemplaza al title nativo
+    p.onmouseover=ev=>{ const b=ev.target.closest("[data-sym]"); if(b) mostrarTipSimbolo(b); else hideTip(); };
+    p.onmouseleave=hideTip;
     return; }
   if(selected.type==="wall"){ const w=doc.walls.find(x=>x.id===selected.id); if(!w){setSel([]);return renderInspector(p);}
     const L=wallLen(w);
@@ -2264,7 +2308,7 @@ function cotasAuto(){ const rooms=detectRooms(); let added=0;
   else avisar("No encontré contorno cerrado para acotar."); }
 function calcAvisos(){
   const av=[];
-  const puntos=doc.elements.filter(e=>e.type!=="panel");
+  const puntos=doc.elements.filter(esElectrico);
   if(!panelPos()&&puntos.length) av.push("No hay ⚡ tablero en el plano: el cable por circuito y el unifilar no se pueden estimar.");
   const sc=puntos.filter(e=>!e.circuitId).length;
   if(sc) av.push(sc+" punto(s) sin circuito asignado — marco de selección → ⚡ asignar circuito.");
@@ -2333,7 +2377,7 @@ function renderCircuits(p){
   html+=`<div class="kdt" style="margin:14px 0 6px">${avisos.length?"⚠ Avisos ("+avisos.length+")":"✔ Sin avisos"}</div>`;
   if(avisos.length) html+=`<div style="display:flex;flex-direction:column;gap:6px">`+avisos.map(a=>`<div style="font-size:12px;line-height:1.45;padding:7px 9px;border-left:3px solid var(--danger);background:var(--panel2);border-radius:0 6px 6px 0;color:var(--soft)">${a}</div>`).join("")+`</div>`;
   // sin asignar
-  const libres=doc.elements.filter(e=>e.type!=="panel"&&!e.circuitId);
+  const libres=doc.elements.filter(e=>esElectrico(e)&&!e.circuitId);
   if(libres.length) html+=`<p class="muted" style="margin-top:12px">⚠ <b>${libres.length}</b> punto(s) sin circuito. <button id="asigTodo" class="ghost" style="min-height:26px;padding:2px 8px">Asignar al 1º</button></p>`;
   html+=`<div class="disclaimer">Cargas de referencia: toma 180 VA · lámpara 100 VA (NEC). La verificación del 80% es una guía visual — <b>no sustituye el cálculo del profesional responsable</b>. El cable es ESTIMACIÓN (ruta manhattan al tablero + 4 m por punto + ${settings.desperdicio}% desperdicio).</div>`;
   p.innerHTML=html;
@@ -2343,7 +2387,7 @@ function renderCircuits(p){
   document.getElementById("numPts").onclick=numerarPuntos;
   const at=document.getElementById("asigTodo");
   if(at) at.onclick=()=>{ if(!doc.circuits.length) addCircuit();
-    doc.elements.forEach(e=>{ if(e.type!=="panel"&&!e.circuitId) e.circuitId=doc.circuits[0].id; });
+    doc.elements.forEach(e=>{ if(esElectrico(e)&&!e.circuitId) e.circuitId=doc.circuits[0].id; });
     pushHistory(); render(); };
   p.querySelectorAll("[data-cn]").forEach(inp=>inp.onchange=()=>{ const c=circuitOf(inp.dataset.cn); if(c){c.name=inp.value;pushHistory();render();} });
   p.querySelectorAll("[data-ca]").forEach(s=>s.onchange=()=>{ const c=circuitOf(s.dataset.ca); if(c){c.amps=+s.value;pushHistory();renderPanel();} });
@@ -2389,16 +2433,16 @@ function renderLayers(p){ const L=[["structure","🧱 Estructura (paredes)"],["o
 
 // totales de cotización — única fuente de verdad (la usan renderCot, badge y toast)
 function cotTotales(){
-  const elemCount={}; doc.elements.forEach(e=>elemCount[e.type]=(elemCount[e.type]||0)+1);
+  const elemCount={}; doc.elements.forEach(e=>{ if(!elInfo(e.type).decorativo) elemCount[e.type]=(elemCount[e.type]||0)+1; });
   const elemCost=doc.elements.reduce((s,e)=>s+priceOf(e.type),0);
   let cableTotal=0; doc.circuits.forEach(c=>cableTotal+=circuitCableM(c));
   const cableCost=cableTotal*settings.precioCableM;
-  const puntos=doc.elements.filter(e=>e.type!=="panel").length;
+  const puntos=doc.elements.filter(esElectrico).length;
   const manoObra=puntos*settings.precioPunto;
   const tubM=doc.routes.reduce((s,r)=>s+routeLen(r)/CM_PER_M,0);
   const tubCost=tubM*(settings.precioTuboM||0);
   return {elemCount,elemCost,cableTotal,cableCost,puntos,manoObra,tubM,tubCost,
-    items:doc.elements.length,total:elemCost+cableCost+manoObra+tubCost};
+    items:doc.elements.filter(e=>!elInfo(e.type).decorativo).length,total:elemCost+cableCost+manoObra+tubCost};
 }
 
 function renderCot(p){
@@ -2930,7 +2974,7 @@ function activarDragFicha(btn,cat){
 
 const TOOLS=[["select","↖","Elegir"],["wall","／","Pared"],["curve","⌒","Curva"],["room","▭","Cuarto"],
   ["door","🚪","Puerta"],["window","🪟","Ventana"],["dim","↔","Cota"],["label","🔖","Espacio"],["text","T","Texto"],
-  ["sep"],["toma","🔌","Tomas"],["lampara","💡","Luces"],["interruptor","🎚️","Apagad."],["extra","🔔","Más"],["equipo","🚿","Equipos"],["panel","⚡","Tablero"],["route","〰️","Tubo"],["photo","📷","Foto"],["stair","🪜","Escalera"],
+  ["sep"],["toma","🔌","Tomas"],["lampara","💡","Luces"],["interruptor","🎚️","Apagad."],["extra","🔔","Más"],["equipo","🚿","Equipos"],["panel","⚡","Tablero"],["route","〰️","Tubo"],["photo","📷","Foto"],["stair","🪜","Escalera"],["mueble","🛋️","Muebles"],
   ["sep"],["pan","✋","Mano"]];
 const rail=document.getElementById("rail");
 TOOLS.forEach(t=>{ if(t[0]==="sep"){ const s=document.createElement("div"); s.className="sep"; rail.appendChild(s); return; }
@@ -2960,8 +3004,58 @@ const TIPS={
   route:["Tubo","Traza tubería o canalización por circuito.","U"],
   photo:["Foto","Ancla una foto de obra al plano.","F"],
   stair:["Escalera","Dibuja una escalera con cálculo de escalones.","E"],
+  mueble:["Muebles","Coloca muebles para visualizar la casa (sofá, cama, baño…). Son solo decorativos: no afectan la cotización ni los circuitos.",""],
   pan:["Mano","Mueve el lienzo arrastrando. Rueda = zoom.","P"]
 };
+/* ===== Descripciones en lenguaje llano de cada símbolo del catálogo (tooltip de la biblioteca) ===== */
+const SYMDESC={
+  toma:"Enchufe común para conectar aparatos (120 V).",
+  toma_doble:"Dos enchufes en un mismo punto (120 V).",
+  toma_220:"Toma de 220 V con circuito propio, para cargas grandes.",
+  toma_gfci:"Toma con protección contra choque; va en baños, cocina y exteriores.",
+  lampara:"Lámpara que cuelga del cielo.",
+  plafon:"Luz pegada al cielo (plafón).",
+  spot:"Luz empotrada en el cielo (spot / dicroico).",
+  aplique:"Lámpara montada en la pared.",
+  interruptor:"Apagador que enciende una luz.",
+  sw_doble:"Apagador de dos teclas: controla dos luces.",
+  sw_triple:"Apagador de tres teclas: controla tres luces.",
+  sw_3vias:"Par de apagadores para prender la misma luz desde dos lugares (escaleras).",
+  timbre:"Timbre de puerta.",
+  tv:"Salida de TV / cable coaxial.",
+  datos:"Salida de internet / red (datos).",
+  abanico:"Abanico o ventilador de cielo.",
+  termoducha:"Ducha eléctrica 220 V; requiere circuito propio.",
+  cocina220:"Cocina eléctrica 220 V; circuito dedicado.",
+  refri:"Refrigeradora; conviene un circuito dedicado.",
+  lavadora:"Lavadora; se recomienda circuito dedicado.",
+  secadora:"Secadora 220 V; circuito dedicado.",
+  ac:"Aire acondicionado mini-split 220 V; circuito dedicado.",
+  bomba:"Bomba de agua; circuito dedicado.",
+  panel:"Tablero / centro de carga: de aquí salen los circuitos.",
+  mueble_sofa:"Sofá / sillón. Solo decorativo, no afecta la cotización.",
+  mueble_cama:"Cama. Solo decorativa, no afecta la cotización.",
+  mueble_mesa:"Mesa o comedor. Solo decorativo, no afecta la cotización.",
+  mueble_silla:"Silla. Solo decorativa, no afecta la cotización.",
+  mueble_inodoro:"Inodoro / sanitario. Solo decorativo, no afecta la cotización.",
+  mueble_lavabo:"Lavabo / pila. Solo decorativo, no afecta la cotización.",
+  mueble_tina:"Bañera / tina. Solo decorativo, no afecta la cotización.",
+  mueble_closet:"Clóset / ropero. Solo decorativo, no afecta la cotización."
+};
+function mostrarTipSimbolo(tile){
+  if(window.matchMedia&&!matchMedia("(hover:hover)").matches) return; // solo con mouse real, nunca en táctil
+  const t=document.getElementById("tip"); if(!t||!tile) return;
+  const k=tile.dataset.sym, i=ELEMENTS[k]; if(!i) return;
+  const pr=priceOf(k), precio=pr>0?` · <span style="color:var(--soft)">${mon(pr)}</span>`:"";
+  const desc=SYMDESC[k]?`<br><span style="color:var(--soft)">${SYMDESC[k]}</span>`:"";
+  t.innerHTML=`<b>${i.icon} ${i.name}</b>${precio}${desc}`;
+  t.style.display="block";
+  const rb=tile.getBoundingClientRect(), rt=t.getBoundingClientRect();
+  let x=rb.left-rt.width-10, y=rb.top+rb.height/2-rt.height/2; // panel a la derecha: el tip va a la IZQUIERDA de la ficha
+  if(x<8) x=rb.right+10; // si no cabe a la izquierda, salta a la derecha
+  y=Math.max(8,Math.min(y,window.innerHeight-rt.height-8));
+  t.style.left=x+"px"; t.style.top=y+"px";
+}
 function mostrarTipBarra(btn){
   if(window.matchMedia&&!matchMedia("(hover:hover)").matches) return; // solo con mouse real, nunca en táctil
   const t=document.getElementById("tip"), d=TIPS[btn.dataset.tool]; if(!t||!d) return;
@@ -3005,7 +3099,6 @@ document.getElementById("clearBtn").onclick=async ()=>{ const n=await pedir("✦
   if(n!=null){ doSave(); createProject(n||"Proyecto"); render(); avisar("Proyecto creado. El anterior quedó guardado en 📁."); } };
 document.getElementById("projBtn").onclick=()=>showProjects();
 document.getElementById("helpBtn").onclick=()=>showTutorial();
-document.getElementById("mtoggle").onclick=()=>document.getElementById("side").classList.toggle("open");
 
 // zoom
 document.getElementById("zin").onclick=()=>{ if(v3d){ z3=Math.min(2.5,z3*1.18); build3d(); return; }
@@ -3117,11 +3210,11 @@ async function printPDF(){
     {k:"100",txt:"📏 Escala REAL 1:100 — trámites/permisos"}]);
   if(esc==null) return;
   const sheet=document.getElementById("printsheet");
-  const puntos=doc.elements.filter(e=>e.type!=="panel").length;
+  const puntos=doc.elements.filter(esElectrico).length;
   const fecha=new Date().toLocaleDateString("es-CR",{day:"2-digit",month:"long",year:"numeric"});
   const cirRows=doc.circuits.map(c=>{ const va=circuitLoad(c),cap=circuitCapacity(c);
     return `<tr><td><span style="color:${c.color}">⬤</span> ${c.name}</td><td>${c.amps} A · ${AWG_BY_BREAKER[c.amps]||"—"} AWG</td><td>${circuitPoints(c)}</td><td>${va} / ${cap} VA (${cap?Math.round(va/cap*100):0}%)</td><td>${circuitCableM(c).toFixed(1)} m</td></tr>`; }).join("");
-  const elemCount={}; doc.elements.forEach(e=>elemCount[e.type]=(elemCount[e.type]||0)+1);
+  const elemCount={}; doc.elements.forEach(e=>{ if(!elInfo(e.type).decorativo) elemCount[e.type]=(elemCount[e.type]||0)+1; });
   const matRows=Object.keys(elemCount).map(k=>`<tr><td>${elInfo(k).icon} ${elInfo(k).name}</td><td>${elemCount[k]}</td></tr>`).join("");
   sheet.innerHTML=`
     <div class="ph">
@@ -3372,7 +3465,7 @@ function esMovil(){ try{ return (matchMedia("(pointer:coarse)").matches&&innerWi
 function aplicarModo(){ document.body.classList.toggle("mobile",esMovil()); }
 let sheetState="peek";
 function setSheet(st){ sheetState=st; const sd=document.querySelector(".side"); if(!sd)return;
-  sd.classList.toggle("mid",st==="mid"); sd.classList.toggle("full",st==="full"); }
+  sd.classList.toggle("mid",st==="mid"); sd.classList.toggle("full",st==="full"); actualizarSheetHint(); }
 async function abrirMenuMovil(){
   const k=await pedirOpcion("Menú",[
     {k:"grid",txt:(settings.grid?"✓ ":"　")+"▤ Grilla"},
@@ -3406,6 +3499,8 @@ document.getElementById("fabU").onclick=undo;
 document.getElementById("fabR").onclick=redo;
 document.getElementById("fabOK").onclick=finishDraft;
 document.getElementById("fabX").onclick=()=>{ draft=null; setSel([]); pruneNodes(); updateHint(); render(); };
+// barra "Editar ▲": sube el panel a mid para editar el objeto seleccionado
+document.getElementById("sheethint")?.addEventListener("click",()=>setSheet("mid"));
 // asa del bottom sheet: tap alterna, arrastre sube/baja
 (function(){ const h=document.getElementById("sheethandle"); if(!h)return;
   let y0=null,st0=null;
