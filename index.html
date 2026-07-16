@@ -1,5 +1,5 @@
 <title>PlanEléctrico Pro — Editor de planos</title>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#0e1e39">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -582,6 +582,15 @@ const N=id=>doc.nodes[id];
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const clone=o=>JSON.parse(JSON.stringify(o));
 function fmt(cm){ return cm>=CM_PER_M? (cm/CM_PER_M).toFixed(2)+" m" : Math.round(cm)+" cm"; }
+function mfs(){ return document.body.classList.contains("mobile")?1.6:1; } // measure-font-scale: medidas legibles en móvil
+// Distancia recta y cable estimado (entubado: ortogonal + bajadas verticales + desperdicio) entre dos elementos
+function cableEntreDosM(a,b){
+  const recta_m=dist(a,b)/CM_PER_M;
+  const H=settings.wallH||250;
+  const cm=(Math.abs(a.x-b.x)+Math.abs(a.y-b.y))+Math.max(0,H-alturaOf(a))+Math.max(0,H-alturaOf(b));
+  const cable_m=(cm/CM_PER_M)*(1+(settings.desperdicio||0)/100);
+  return { recta_m, cable_m, costo:cable_m*(settings.precioCableM||0) };
+}
 function snapNum(v){ return settings.snap? Math.round(v/settings.gridSize)*settings.gridSize : v; }
 function el(tag,attrs){ const e=document.createElementNS("http://www.w3.org/2000/svg",tag);
   for(const k in attrs) e.setAttribute(k,attrs[k]); return e; }
@@ -644,7 +653,7 @@ function nearestWall(p,maxd){ let best=null,bd=maxd||20/scale;
   for(const w of doc.walls){ if(!enPiso(w))continue; const pr=projectOnWall(w,p); if(pr.d<bd){bd=pr.d;best={w,pr};} } return best; }
 
 /* ===================== Coordenadas ===================== */
-function updateScale(){ const r=svg.getBoundingClientRect(); scale=r.width/vb.w; applyViewBox(); }
+function updateScale(){ const r=svg.getBoundingClientRect(); scale=r.width/vb.w; if(r.width) vb.h=vb.w*(r.height/r.width); applyViewBox(); }
 function applyViewBox(){ svg.setAttribute("viewBox",`${vb.x} ${vb.y} ${vb.w} ${vb.h}`); }
 function toWorld(ev){ const r=svg.getBoundingClientRect();
   return { x: vb.x+(ev.clientX-r.left)/r.width*vb.w, y: vb.y+(ev.clientY-r.top)/r.height*vb.h }; }
@@ -951,8 +960,8 @@ function render(skipPanel){
       "stroke-linecap":"round",opacity:.35,style:"pointer-events:none"})); }
     // medida sobre el punto medio del arco
     const L=wallLen(w); const mp=wallPointAt(w,L/2); const ang=mp.ang*180/Math.PI;
-    if(L*scale>36){ // LOD: ocultar medidas de paredes chicas en pantalla
-    const t=el("text",{x:mp.x,y:mp.y,fill:"var(--ink)","font-size":13/scale,
+    if(L*scale>36/mfs()){ // LOD: ocultar medidas de paredes chicas en pantalla
+    const t=el("text",{x:mp.x,y:mp.y,fill:"var(--ink)","font-size":13*mfs()/scale,
       "text-anchor":"middle",dy:-(grosorDe(w)/2+6)/scale,style:"pointer-events:none;font-family:var(--mono)",
       transform:`rotate(${Math.abs(ang)>90?ang+180:ang} ${mp.x} ${mp.y})`});
     t.textContent=fmt(L)+(w.curve?" ⌒":"")+(w.name?" · "+w.name:""); gWalls.appendChild(t); }
@@ -1033,8 +1042,8 @@ function render(skipPanel){
     }
     // medida visible de la apertura (rotada como la de la pared)
     const degA=ang*180/Math.PI;
-    if(o.width*scale>26){
-    const mt=el("text",{x:cx,y:cy,"font-size":11/scale,fill:o.kind==="door"?"var(--soft)":"var(--blue)",
+    if(o.width*scale>26/mfs()){
+    const mt=el("text",{x:cx,y:cy,"font-size":11*mfs()/scale,fill:o.kind==="door"?"var(--soft)":"var(--blue)",
       "text-anchor":"middle",dy:(grosorDe(w)/2+13)/scale,
       style:"pointer-events:none;font-family:var(--mono)",
       transform:`rotate(${Math.abs(degA)>90?degA+180:degA} ${cx} ${cy})`});
@@ -1105,11 +1114,13 @@ function render(skipPanel){
   });
 
   // cotas — ocultas en vista cliente
-  if(!vistaCliente) doc.dims.forEach(d=>{ if(!enPiso(d))return; const off=18/scale;
+  if(!vistaCliente) doc.dims.forEach(d=>{ if(!enPiso(d))return; const off=18*mfs()/scale;
+    gDim.appendChild(el("line",{x1:d.a.x,y1:d.a.y,x2:d.b.x,y2:d.b.y,stroke:"transparent",
+      "stroke-width":16/scale,"data-id":d.id,"data-kind":"dim",style:"cursor:pointer"})); // halo táctil para tocar la cota con el dedo
     gDim.appendChild(el("line",{x1:d.a.x,y1:d.a.y,x2:d.b.x,y2:d.b.y,stroke:"var(--accent)",
       "stroke-width":1,"vector-effect":"non-scaling-stroke","data-id":d.id,"data-kind":"dim",style:"cursor:pointer"}));
     const mid={x:(d.a.x+d.b.x)/2,y:(d.a.y+d.b.y)/2}; const ang=angleOf(d.a,d.b)*180/Math.PI;
-    const t=el("text",{x:mid.x,y:mid.y-off,fill:"var(--accent)","font-size":13/scale,"text-anchor":"middle",
+    const t=el("text",{x:mid.x,y:mid.y-off,fill:"var(--accent)","font-size":13*mfs()/scale,"text-anchor":"middle",
       style:"pointer-events:none;font-family:var(--mono)",
       transform:`rotate(${Math.abs(ang)>90?ang+180:ang} ${mid.x} ${mid.y-off})`});
     t.textContent=fmt(dist(d.a,d.b)); gDim.appendChild(t);
@@ -1197,9 +1208,15 @@ function render(skipPanel){
       sb2.querySelector("#sb_del").onclick=deleteSelected;
       sb2.querySelector("#sb_x").onclick=()=>{ setSel([]); render(); };
     } else sb2.style.display="none"; }
-  // FABs ✔/✕ (móvil): visibles solo con un trazo en curso
+  // fantasma de colocación pendiente (dos toques en móvil)
+  if(pendingPlace){ const et=(settings.varByCat[pendingPlace.cat]&&CATS[pendingPlace.cat].includes(settings.varByCat[pendingPlace.cat]))?settings.varByCat[pendingPlace.cat]:CATS[pendingPlace.cat][0];
+    const gh=el("g",{style:"pointer-events:none",opacity:"0.6"});
+    gh.appendChild(el("circle",{cx:pendingPlace.x,cy:pendingPlace.y,r:20/scale,fill:"var(--panel)",stroke:"var(--accent)","stroke-width":2/scale,"stroke-dasharray":(5/scale)+" "+(4/scale)}));
+    const gt=el("text",{x:pendingPlace.x,y:pendingPlace.y,"font-size":18/scale,"text-anchor":"middle",dy:6/scale,style:"pointer-events:none"});
+    gt.textContent=elInfo(et).icon; gh.appendChild(gt); svg.appendChild(gh); }
+  // FABs ✔/✕ (móvil): visibles con un trazo en curso o una colocación pendiente
   const fOK=document.getElementById("fabOK"),fX=document.getElementById("fabX");
-  if(fOK){ const on=!!draft; fOK.style.display=on?"":"none"; fX.style.display=on?"":"none"; }
+  if(fOK){ const on=!!draft||!!pendingPlace; fOK.style.display=on?"":"none"; fX.style.display=on?"":"none"; }
   applyLayers(); if(!skipPanel){ renderPanel(); renderCtxBar(); } renderStatus(); updateCotBadge(); updateHistBtns();
 }
 
@@ -1212,7 +1229,11 @@ function renderCtxBar(){
   const G=(lab,ctrl)=>`<span class="cxg"><label>${lab}</label>${ctrl}</span>`;
   const head=(txt)=>`<span class="cxg" style="font-weight:700;color:var(--ink)">${txt}</span>`;
   if(selection.length>=2){ const B=(id,t,l)=>`<button id="${id}" title="${t}">${l}</button>`;
-    cb.innerHTML=head("✦ "+selection.length+" seleccionados")+
+    let cableHTML="";
+    if(selection.length===2&&selection.every(s=>s.type==="element")){ const a=doc.elements.find(x=>x.id===selection[0].id),b=doc.elements.find(x=>x.id===selection[1].id);
+      if(a&&b){ const rc=cableEntreDosM(a,b);
+        cableHTML=`<span class="cxg"><label>Cable</label><span style="font-family:var(--mono);font-size:12px;white-space:nowrap">📏 ${fmt(rc.recta_m*100)} · 🔌 ${fmt(rc.cable_m*100)} entubado · ${mon(rc.costo)}</span></span>`; } }
+    cb.innerHTML=head("✦ "+selection.length+" seleccionados")+cableHTML+
       `<span class="cxg"><label>Alinear</label>${B("al_l","Alinear a la izquierda","⬅")}${B("al_cx","Misma X (columna)","⬍")}${B("al_r","Alinear a la derecha","➡")}${B("al_t","Alinear arriba","⬆")}${B("al_cy","Misma Y (fila)","⬌")}${B("al_b","Alinear abajo","⬇")}</span>`+
       `<span class="cxg"><label>Distribuir</label>${B("ds_h","Espaciado horizontal igual","↔")}${B("ds_v","Espaciado vertical igual","↕")}</span>`;
     cb.style.display="flex";
@@ -1435,12 +1456,14 @@ let action=null; // {type,...}
 let fmtClip=null, pintarFormato=false; // cuentagotas / copiar formato
 let smartGuides=[]; // guías inteligentes (magenta) mientras se arrastra
 let vistaCliente=false; // ✨ plano limpio para enseñar al cliente (oculta cotas, anclas y técnica)
-function setTool(t){ tool=t; draft=null; setSel([]); pintarFormato=false;
+// Cursor flecha negra estilo Illustrator para "Elegir" (solo escritorio; en táctil no hay cursor)
+const ARROW_CUR="url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='22'%20height='22'%20viewBox='0%200%2024%2024'%3E%3Cpath%20d='M4%203L4%2019L8.5%2015L11%2021L14%2020L11.5%2014L18%2014Z'%20fill='%23000'%20stroke='%23fff'%20stroke-width='1.3'%20stroke-linejoin='round'/%3E%3C/svg%3E\") 4 3, default";
+function setTool(t){ const bothSel=(tool==="select"||tool==="marquee")&&(t==="select"||t==="marquee"); tool=t; draft=null; pendingPlace=null; if(!bothSel) setSel([]); pintarFormato=false;
   if(CATS[t]&&!settings.dragVisto){ settings.dragVisto=true; scheduleSave();
     avisar("💡 Tip: también podés ARRASTRAR la ficha de la barra directo al plano, como en Duolingo."); }
   document.querySelectorAll(".tool").forEach(b=>b.classList.toggle("on",b.dataset.tool===t));
   svg.classList.toggle("pan",t==="pan");
-  svg.style.cursor = t==="select"?"default":(t==="pan"?"grab":"crosshair");
+  svg.style.cursor = t==="select"?ARROW_CUR:(t==="pan"?"grab":"crosshair");
   const sb=document.getElementById("shapebar"); if(sb) sb.style.display = t==="room"?"flex":"none";
   const eb=document.getElementById("elembar");
   if(eb){ if(CATS[t]&&CATS[t].length>1){
@@ -1685,10 +1708,10 @@ svg.addEventListener("dblclick",async ev=>{
 
 function onDown(ev){
   if(dragFicha&&dragFicha.activo) return; // un 2º dedo durante el drag de ficha no dibuja
-  ev.preventDefault(); svg.setPointerCapture&&svg.setPointerCapture(ev.pointerId);
+  ev.preventDefault(); try{ svg.setPointerCapture&&svg.setPointerCapture(ev.pointerId); }catch(_){} // si falla no debe abortar la selección
   const w=toWorld(ev);
   // vista cliente = solo lectura: solo navegar (mano, botón medio, Shift+arrastre); nada se edita
-  if(vistaCliente && !(tool==="pan"||ev.button===1||(tool==="select"&&ev.shiftKey))){
+  if(vistaCliente && !(tool==="pan"||ev.button===1||((tool==="select"||tool==="marquee")&&ev.shiftKey))){
     if(tool==="select"){ action={type:"pan",sx:ev.clientX,sy:ev.clientY,ox:vb.x,oy:vb.y}; return; } // arrastrar = mover lienzo
     avisar("✨ Vista cliente (solo lectura) — tocá ✨ para volver a editar."); return; }
   if(calibMode){
@@ -1717,8 +1740,9 @@ function onDown(ev){
         if(i>=0) sw.controla.splice(i,1); else sw.controla.push(id);
         pushHistory(); render(); return; } }
     linkMode=null; updateHint(); render(); return; }
-  if(tool==="pan" || ev.button===1 || (tool==="select"&&ev.shiftKey)){ action={type:"pan",sx:ev.clientX,sy:ev.clientY,ox:vb.x,oy:vb.y}; return; }
+  if(tool==="pan" || ev.button===1 || ((tool==="select"||tool==="marquee")&&ev.shiftKey)){ action={type:"pan",sx:ev.clientX,sy:ev.clientY,ox:vb.x,oy:vb.y}; return; }
 
+  if(tool==="marquee"){ action={type:"marquee",x0:w.x,y0:w.y,x1:w.x,y1:w.y}; render(); return; } // Marco: siempre selección por caja
   if(tool==="select"){ return startSelect(ev,w); }
 
   if(tool==="wall"){ let sp;
@@ -1774,10 +1798,17 @@ function onDown(ev){
     else draft={type:"route",pts:[sp],cursor:sp};
     render(); return; }
 
-  if(CATS[tool]){ colocarElemento(tool,{x:snapNum(w.x),y:snapNum(w.y)}); return; }
+  if(CATS[tool]){ const sp={x:snapNum(w.x),y:snapNum(w.y)};
+    if(document.body.classList.contains("mobile")){
+      // dos toques: el 1º arma un fantasma; un 2º toque cerca (o ✔) confirma; lejos reubica; ✕ cancela
+      if(pendingPlace&&Math.hypot(sp.x-pendingPlace.x,sp.y-pendingPlace.y)<44/scale){
+        const pp=pendingPlace; pendingPlace=null; setTool("select"); colocarElemento(pp.cat,{x:pp.x,y:pp.y}); return; }
+      pendingPlace={cat:tool,x:sp.x,y:sp.y}; avisar("Tocá ✔ (o el mismo punto) para colocar · ✕ cancela"); updateHint(); render(); return; }
+    colocarElemento(tool,sp); return; }
 }
 
 // alta de un elemento eléctrico (tap en canvas o drop desde la bandeja)
+let pendingPlace=null; // colocación pendiente en móvil: {cat,x,y} — confirmación en dos toques
 function colocarElemento(cat,sp){
   const et=(settings.varByCat[cat]&&CATS[cat].includes(settings.varByCat[cat]))?settings.varByCat[cat]:CATS[cat][0];
   const e={id:uid("e"),type:et,x:sp.x,y:sp.y,label:"",notes:"",piso:doc.pisoActivo}; doc.elements.push(e);
@@ -1839,8 +1870,8 @@ function startSelect(ev,w){
       action=ph?{type:"photomove",ph,dx:w.x-ph.x,dy:w.y-ph.y,moved:false}:null; render(); return; }
     if(k==="dim"){ setSel([{type:"dim",id}]); render(); return; }
   }
-  // vacío: marquesina de selección (Shift+arrastre o herramienta Mano = mover lienzo)
-  action={type:"marquee",x0:w.x,y0:w.y,x1:w.x,y1:w.y}; render();
+  // Elegir: tocar en vacío deselecciona (la selección por CAJA es la herramienta Marco)
+  setSel([]); render();
 }
 
 function onMove(ev){
@@ -1919,7 +1950,7 @@ function onUp(ev){
     if(action.type==="marquee"){
       const r={x1:Math.min(action.x0,action.x1),y1:Math.min(action.y0,action.y1),
                x2:Math.max(action.x0,action.x1),y2:Math.max(action.y0,action.y1)};
-      const tiny=(r.x2-r.x1)<6/scale&&(r.y2-r.y1)<6/scale;
+      const tiny=(r.x2-r.x1)<12/scale&&(r.y2-r.y1)<12/scale; // umbral apto para dedo (antes 6px, disparaba marco al toque)
       if(tiny){ setSel([]); } // clic en vacío = deseleccionar
       else setSel(marqueeSelect(r));
       action=null; render(); return;
@@ -2005,6 +2036,18 @@ function renderInspector(p){
     const cnt={}; selection.forEach(s=>cnt[s.type]=(cnt[s.type]||0)+1);
     const selElems=selection.filter(s=>s.type==="element")
       .map(s=>doc.elements.find(e=>e.id===s.id)).filter(e=>esElectrico(e));
+    let cableInfo="", parSW=null, parLZ=null;
+    if(selection.length===2&&selection.every(s=>s.type==="element")){
+      const a=doc.elements.find(e=>e.id===selection[0].id), b=doc.elements.find(e=>e.id===selection[1].id);
+      if(a&&b){ const rc=cableEntreDosM(a,b);
+        parSW=[a,b].find(x=>SWITCH_TYPES.includes(x.type)); parLZ=[a,b].find(x=>LIGHT_TYPES.includes(x.type));
+        const yaV=parSW&&parLZ&&(parSW.controla||[]).includes(parLZ.id);
+        const linkBtn=(parSW&&parLZ)?(yaV?`<div class="muted" style="margin-top:5px">🔗 Apagador y luz vinculados</div>`:`<button id="f_linkpair" style="width:100%;justify-content:center;margin-top:6px">🔗 Vincular apagador y luz</button>`):"";
+        cableInfo=`<div style="background:var(--panel2);border-radius:9px;padding:9px 11px;margin:6px 0">
+          <div style="font-weight:700">🔌 Cable entre los 2</div>
+          <div style="font-family:var(--mono);font-size:13px;margin-top:3px;line-height:1.7">📏 Distancia: ${fmt(rc.recta_m*100)}<br>🔌 Estimado: ${fmt(rc.cable_m*100)} <span style="color:var(--soft)">entubado</span><br>💰 ${mon(rc.costo)}</div>
+          <div class="muted" style="font-size:11px;margin-top:2px">Ortogonal + bajadas + ${settings.desperdicio||0}% desperdicio.</div>
+          ${linkBtn}</div>`; } }
     const cirOpts=`<option value="">— elegir circuito —</option>`+
       doc.circuits.map(c=>`<option value="${c.id}">⬤ ${c.name} · ${c.amps}A</option>`).join("")+
       `<option value="__new__">＋ Nuevo circuito…</option>`;
@@ -2012,9 +2055,12 @@ function renderInspector(p){
       <div class="big">${selection.length}</div>
       <p class="muted">${cnt.wall?cnt.wall+" pared(es) · ":""}${cnt.element?cnt.element+" elemento(s) · ":""}${cnt.route?cnt.route+" tubo(s) · ":""}${cnt.photo?cnt.photo+" foto(s) · ":""}${cnt.label?cnt.label+" texto(s) · ":""}${cnt.dim?cnt.dim+" cota(s)":""}</p>
       <p class="muted">Arrastra cualquier pieza seleccionada para mover todo el grupo. Ctrl+clic añade o quita.</p>
+      ${cableInfo}
       ${selElems.length?field("⚡ Asignar circuito a los "+selElems.length+" puntos",`<select id="f_circall">${cirOpts}</select>`):""}
       <button id="f_dup" style="width:100%;justify-content:center;margin-top:4px">⧉ Duplicar selección (Ctrl+D)</button>
       <button id="f_delall" class="danger" style="width:100%;justify-content:center;margin-top:8px">🗑 Eliminar selección (${selection.length})</button>`;
+    const flp=document.getElementById("f_linkpair");
+    if(flp) flp.onclick=()=>{ if(parSW&&parLZ){ parSW.controla=parSW.controla||[]; if(!parSW.controla.includes(parLZ.id)) parSW.controla.push(parLZ.id); pushHistory(); render(); avisar("🔗 Apagador y luz vinculados"); } };
     const fc=document.getElementById("f_circall");
     if(fc) fc.onchange=ev=>{ let cid=ev.target.value; if(!cid)return;
       if(cid==="__new__"){ const c=addCircuit(); cid=c.id; }
@@ -3092,7 +3138,7 @@ function activarDragFicha(btn,cat){
   btn.addEventListener("pointerup",ev=>soltarFicha(ev,false));
   btn.addEventListener("pointercancel",ev=>soltarFicha(ev,true)); }
 
-const TOOLS=[["select","↖","Elegir"],["wall","／","Pared"],["curve","⌒","Curva"],["room","▭","Cuarto"],
+const TOOLS=[["select","↖","Elegir"],["marquee","▚","Marco"],["wall","／","Pared"],["curve","⌒","Curva"],["room","▭","Cuarto"],
   ["door","🚪","Puerta"],["window","🪟","Ventana"],["dim","↔","Cota"],["label","🔖","Espacio"],["text","T","Texto"],
   ["sep"],["toma","🔌","Tomas"],["lampara","💡","Luces"],["interruptor","🎚️","Apagad."],["extra","🔔","Más"],["equipo","🚿","Equipos"],["panel","⚡","Tablero"],["route","〰️","Tubo"],["photo","📷","Foto"],["stair","🪜","Escalera"],["mueble","🛋️","Muebles"],
   ["sep"],["pan","✋","Mano"]];
@@ -3106,7 +3152,8 @@ TOOLS.forEach(t=>{ if(t[0]==="sep"){ const s=document.createElement("div"); s.cl
 
 /* ===== Tooltips estilo Illustrator sobre los íconos de la barra (nombre + qué hace + atajo) ===== */
 const TIPS={
-  select:["Seleccionar","Elige, mueve y edita objetos. Arrastra una caja para seleccionar varios.","V"],
+  select:["Elegir","Tocá para elegir, mover y editar UN objeto (sin marco accidental).","V"],
+  marquee:["Marco","Arrastrá una caja para seleccionar varios objetos a la vez.","B"],
   wall:["Pared","Dibuja muros rectos. Clic-clic encadena; doble clic termina.","W"],
   curve:["Pared curva","Toca inicio y fin y la pared sale curva; ajusta cuánto con el rombo ◇.","C"],
   room:["Cuarto","Dibuja una habitación completa de un solo arrastre.","R"],
@@ -3468,10 +3515,10 @@ window.addEventListener("keydown",e=>{
     e.preventDefault(); const paso=e.shiftKey?10:1;
     nudgeSelection(e.key==="ArrowLeft"?-paso:e.key==="ArrowRight"?paso:0,
                    e.key==="ArrowUp"?-paso:e.key==="ArrowDown"?paso:0); return; }
-  if(e.key==="Escape"){ draft=null; setSel([]); linkMode=null; calibMode=null; pintarFormato=false; smartGuides.length=0; pruneNodes(); updateHint(); render(); }
+  if(e.key==="Escape"){ draft=null; pendingPlace=null; setSel([]); linkMode=null; calibMode=null; pintarFormato=false; smartGuides.length=0; pruneNodes(); updateHint(); render(); }
   if(e.key==="Enter"){ finishDraft(); }
   if((e.key==="Delete"||e.key==="Backspace")&&selection.length){ deleteSelected(); }
-  const keys={v:"select",w:"wall",c:"curve",r:"room",d:"door",n:"window",m:"dim",t:"toma",l:"lampara",i:"interruptor",u:"route",f:"photo",e:"stair",p:"pan"};
+  const keys={v:"select",b:"marquee",w:"wall",c:"curve",r:"room",d:"door",n:"window",m:"dim",t:"toma",l:"lampara",i:"interruptor",u:"route",f:"photo",e:"stair",p:"pan"};
   if(keys[e.key.toLowerCase()]) setTool(keys[e.key.toLowerCase()]);
 });
 function selNodosUnicos(){ const ids=new Set();
@@ -3618,8 +3665,8 @@ async function abrirMenuMovil(){
 document.getElementById("menuMovil").onclick=abrirMenuMovil;
 document.getElementById("fabU").onclick=undo;
 document.getElementById("fabR").onclick=redo;
-document.getElementById("fabOK").onclick=finishDraft;
-document.getElementById("fabX").onclick=()=>{ draft=null; setSel([]); pruneNodes(); updateHint(); render(); };
+document.getElementById("fabOK").onclick=()=>{ if(pendingPlace){ const pp=pendingPlace; pendingPlace=null; setTool("select"); colocarElemento(pp.cat,{x:pp.x,y:pp.y}); return; } finishDraft(); };
+document.getElementById("fabX").onclick=()=>{ if(pendingPlace){ pendingPlace=null; updateHint(); render(); return; } draft=null; setSel([]); pruneNodes(); updateHint(); render(); };
 // barra "Editar ▲": sube el panel a mid para editar el objeto seleccionado
 document.getElementById("sheethint")?.addEventListener("click",()=>setSheet("mid"));
 // asa del bottom sheet: tap alterna, arrastre sube/baja
@@ -3635,6 +3682,8 @@ document.getElementById("sheethint")?.addEventListener("click",()=>setSheet("mid
     setSheet(orden[i]); });
 })();
 window.addEventListener("resize",()=>{ updateScale(); if(v3d)build3d(); aplicarModo(); renderCtxBar(); });
+try{ if(window.visualViewport){ const vvSync=()=>updateScale();
+  visualViewport.addEventListener("resize",vvSync); visualViewport.addEventListener("scroll",vvSync); } }catch(_){}
 
 // PWA: service worker SOLO en hosting propio (nunca en el visor de artifacts)
 try{ if("serviceWorker" in navigator && location.protocol.indexOf("http")===0 &&
