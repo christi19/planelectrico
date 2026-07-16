@@ -44,6 +44,7 @@
   button.on{background:var(--blue);border-color:var(--blue);color:#fff;}
   button.ghost{background:transparent;}
   button:focus-visible{outline:2px solid var(--accent);outline-offset:1px;}
+  button:disabled{opacity:.4;cursor:default;}
   .save{font-family:var(--mono);font-size:11px;color:var(--soft);display:flex;align-items:center;gap:6px;}
   .save .led{width:8px;height:8px;border-radius:50%;background:var(--ok);}
   .save.busy .led{background:var(--accent);}
@@ -79,6 +80,10 @@
   .zoombar{position:absolute;right:12px;bottom:12px;display:flex;flex-direction:column;gap:6px;}
   .zoombar button{width:40px;height:40px;justify-content:center;padding:0;font-size:18px;background:var(--panel);}
   .zoombar button.on{border-color:var(--accent);color:var(--accent);}
+  #zcli{flex-direction:column;gap:1px;height:auto;min-height:40px;padding:5px 0 4px;line-height:1;}
+  #zcli .ic{font-size:18px;}
+  #zcli .lbl{font-size:8.5px;font-weight:700;letter-spacing:.02em;}
+  body.mobile #zcli{min-height:42px;}
 
   /* 3D overlay */
   #view3d{position:absolute;inset:0;display:none;overflow:hidden;
@@ -278,22 +283,45 @@
   .sheethint{display:none;}
   body.mobile .side.hassel:not(.mid):not(.full){height:calc(112px + env(safe-area-inset-bottom));}
   body.mobile .side.hassel:not(.mid):not(.full) .sheethint{display:flex;align-items:center;
-    justify-content:center;gap:8px;width:calc(100% - 24px);margin:0 12px 8px;padding:10px 12px;
-    border-radius:11px;background:var(--blue);border:1px solid var(--blue);color:#fff;
-    font-size:13.5px;font-weight:600;box-shadow:0 3px 12px rgba(0,0,0,.28);cursor:pointer;}
-  body.mobile .side.hassel:not(.mid):not(.full) .sheethint b{font-weight:800;}
+    justify-content:center;gap:8px;width:calc(100% - 24px);margin:0 12px 8px;padding:11px 12px;
+    border-radius:11px;background:linear-gradient(180deg,#22589c,#1e4d8c);
+    border:1px solid #14406f;color:#fff;font-size:14px;font-weight:800;letter-spacing:.01em;
+    box-shadow:0 4px 14px rgba(6,20,45,.45);cursor:pointer;}
+  body.mobile .side.hassel:not(.mid):not(.full) .sheethint b{font-weight:600;opacity:.9;font-size:12.5px;}
+  body.mobile .side.hassel:not(.mid):not(.full) .sheethint b::before{content:"· ";opacity:.6;}
   body.mobile .tabs{overflow-x:auto;}
   body.mobile .tabs button{white-space:nowrap;flex:none;padding:0 16px;min-height:38px;}
   body.mobile .tabs::-webkit-scrollbar{display:none;}
   /* reubicaciones sobre el lienzo */
   body.mobile .zoombar{bottom:calc(146px + env(safe-area-inset-bottom));right:8px;}
   body.mobile .floorbar{top:calc(54px + env(safe-area-inset-top));bottom:auto;left:8px;}
-  body.mobile #selbar{left:50%;transform:translateX(-50%);top:calc(8px);}
+  body.mobile #selbar{left:8px;top:8px;transform:none;
+    max-width:calc(100% - 112px);flex-wrap:wrap;justify-content:flex-start;}
   body.mobile .shapebar{top:auto;bottom:calc(146px + env(safe-area-inset-bottom));}
   body.mobile #selbar.shapebar{bottom:auto;}
   body.mobile .fabs{display:flex;position:absolute;right:8px;top:8px;gap:6px;z-index:6;}
-  body.mobile .fabs button{width:42px;height:42px;justify-content:center;background:var(--panel);font-size:17px;}
+  body.mobile .fabs>button{width:42px;height:42px;justify-content:center;background:var(--panel);font-size:17px;}
+  /* Deshacer/rehacer: control segmentado tipo mando (rocker) */
+  .rocker{display:inline-flex;align-items:stretch;background:var(--panel);
+    border:1px solid var(--line2);border-radius:13px;overflow:hidden;
+    box-shadow:0 4px 14px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.06);}
+  .rocker .rk{width:46px;height:42px;min-height:0;margin:0;padding:0;border:0;border-radius:0;
+    background:transparent;color:var(--ink);font-size:16px;font-weight:800;justify-content:center;
+    transition:background .15s ease,color .15s ease;}
+  .rocker .rk-u{border-right:1px solid var(--line2);}
+  .rocker .rk:hover{background:var(--panel2);}
+  .rocker .rk:active{background:var(--blue);color:#fff;transform:none;}
+  .rocker .rk:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;}
+  .rocker .rk:disabled{color:var(--faint);opacity:.45;cursor:default;background:transparent;}
   body.mobile .hint{max-width:94%;font-size:11px;}
+  /* Píldora "Descargar app": persistente mientras NO esté instalada */
+  #btnInstall{display:inline-flex;align-items:center;gap:6px;font-weight:700;
+    background:transparent;border:1px solid var(--ok);color:var(--ok);}
+  #btnInstall:hover{background:rgba(76,195,138,.12);border-color:var(--ok);}
+  #btnInstall[hidden]{display:none!important;}
+  body.mobile #btnInstall{position:fixed;right:8px;top:calc(54px + env(safe-area-inset-top));
+    z-index:44;background:var(--panel);box-shadow:0 4px 14px rgba(0,0,0,.35);
+    font-size:12px;padding:6px 11px;min-height:34px;}
 </style>
 
 <div class="topbar">
@@ -328,6 +356,7 @@
     <button id="themeBtn" class="ghost" title="Tema">◐</button>
     <button id="helpBtn" class="ghost" title="Tutorial">?</button>
   </div>
+  <button id="btnInstall" hidden title="Descargar PlanEléctrico Pro como app">📲 <span class="lbl">Descargar app</span></button>
   <div class="save" id="saveInd"><span class="led"></span><span id="saveTxt">Guardado</span></div>
   <button id="menuMovil" class="ghost" style="display:none" title="Menú">⋮</button>
   <input type="file" id="fileInput" accept="application/json" style="display:none">
@@ -352,7 +381,14 @@
       <button data-shape="U" title="Forma U">U</button>
     </div>
     <div class="shapebar" id="elembar" style="display:none"></div>
-    <div class="fabs" id="fabs"><button id="fabU" title="Deshacer">↶</button><button id="fabR" title="Rehacer">↷</button><button id="fabOK" title="Terminar trazo" style="display:none">✔</button><button id="fabX" title="Cancelar trazo" style="display:none">✕</button></div>
+    <div class="fabs" id="fabs">
+      <div class="rocker" id="urRocker" role="group" aria-label="Deshacer y rehacer">
+        <button id="fabU" class="rk rk-u" title="Deshacer (Ctrl+Z)" aria-label="Deshacer">◄</button>
+        <button id="fabR" class="rk rk-r" title="Rehacer (Ctrl+Y)" aria-label="Rehacer">►</button>
+      </div>
+      <button id="fabOK" title="Terminar trazo" style="display:none">✔</button>
+      <button id="fabX" title="Cancelar trazo" style="display:none">✕</button>
+    </div>
     <div class="shapebar" id="selbar" style="display:none"></div>
     <div class="ctxbar" id="ctxbar" style="display:none"></div>
     <div class="floorbar" id="floorbar"></div>
@@ -360,7 +396,7 @@
       <button id="zin">＋</button>
       <button id="zout">－</button>
       <button id="zfit" title="Ajustar">⤢</button>
-      <button id="zcli" title="Vista cliente: plano limpio (oculta cotas, anclas y colores de circuito)">✨</button>
+      <button id="zcli" title="Vista cliente: plano limpio (oculta cotas, anclas y colores de circuito)"><span class="ic">👁</span><span class="lbl">Cliente</span></button>
       <button id="zpng" title="Descargar PNG del plano (ideal para WhatsApp)">⤓</button>
     </div>
   </div>
@@ -653,6 +689,12 @@ function restore(s){ doc.nodes=s.nodes;doc.walls=s.walls;doc.openings=s.openings
   setSel([]); }
 function undo(){ if(hi>0){ hi--; restore(clone(history[hi])); render(); scheduleSave(); } }
 function redo(){ if(hi<history.length-1){ hi++; restore(clone(history[hi])); render(); scheduleSave(); } }
+function updateHistBtns(){
+  if(typeof hi!=='number') return;
+  const canU=hi>0, canR=hi<history.length-1;
+  ['undo','fabU'].forEach(id=>{const b=document.getElementById(id); if(b)b.disabled=!canU;});
+  ['redo','fabR'].forEach(id=>{const b=document.getElementById(id); if(b)b.disabled=!canR;});
+}
 
 /* ===================== Autosave ===================== */
 let saveTimer=null, storageOK=true;
@@ -1158,7 +1200,7 @@ function render(skipPanel){
   // FABs ✔/✕ (móvil): visibles solo con un trazo en curso
   const fOK=document.getElementById("fabOK"),fX=document.getElementById("fabX");
   if(fOK){ const on=!!draft; fOK.style.display=on?"":"none"; fX.style.display=on?"":"none"; }
-  applyLayers(); if(!skipPanel){ renderPanel(); renderCtxBar(); } renderStatus(); updateCotBadge();
+  applyLayers(); if(!skipPanel){ renderPanel(); renderCtxBar(); } renderStatus(); updateCotBadge(); updateHistBtns();
 }
 
 // Barra de propiedades contextual: muestra las propiedades clave del objeto seleccionado (estilo Illustrator)
@@ -2921,6 +2963,25 @@ function showTutorial(){
 
 /* ===================== Instalar como app (PWA) ===================== */
 let deferredInstall=null; // evento beforeinstallprompt capturado (Android/Chrome/Edge)
+function estaInstalada(){
+  try{ return (window.matchMedia && matchMedia("(display-mode: standalone)").matches)
+              || navigator.standalone===true; }catch(e){ return false; }
+}
+function actualizarBotonDescargar(){
+  const b=document.getElementById("btnInstall"); if(!b) return;
+  b.hidden = estaInstalada();
+}
+async function pedirInstalacion(){
+  try{
+    if(deferredInstall){ const dp=deferredInstall; deferredInstall=null;
+      dp.prompt(); const r=await dp.userChoice;
+      if(r && r.outcome==="accepted") avisar("¡Listo! La app se está instalando 📲");
+      actualizarBotonDescargar(); return; }
+    const iOS=/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+    if(iOS){ showInstallPrompt(); }
+    else { avisar("Para instalar: abrí el menú del navegador (⋮) y elegí «Instalar app», o usá el ícono ⊕ de la barra de direcciones."); }
+  }catch(e){}
+}
 function showInstallPrompt(){
   try{
     if(!esMovil()) return;                                   // el mensaje es "en el celular"
@@ -3171,6 +3232,7 @@ document.getElementById("zcli").onclick=()=>{ vistaCliente=!vistaCliente;
   avisar(vistaCliente?"✨ Vista cliente: plano limpio para enseñar — ⤓ lo baja en PNG. Tocá ✨ para volver a editar.":"Modo edición normal.");
   updateHint(); render(); };
 document.getElementById("zpng").onclick=()=>exportPNG();
+document.getElementById("btnInstall").onclick=pedirInstalacion;
 svg.addEventListener("wheel",e=>{ e.preventDefault(); zoomAt(e.clientX,e.clientY,e.deltaY<0?0.9:1.1); },{passive:false});
 
 // selector de forma de habitación
@@ -3581,9 +3643,10 @@ try{ if("serviceWorker" in navigator && location.protocol.indexOf("http")===0 &&
 
 // PWA: ofrecer "Instalar en el celular" (Android dispara beforeinstallprompt; iOS se ofrece a mano)
 try{
-  window.addEventListener("beforeinstallprompt",function(ev){ ev.preventDefault(); deferredInstall=ev; showInstallPrompt(); });
+  window.addEventListener("beforeinstallprompt",function(ev){ ev.preventDefault(); deferredInstall=ev; showInstallPrompt(); actualizarBotonDescargar(); });
   window.addEventListener("appinstalled",function(){ settings.instalarVisto=true; scheduleSave();
-    var b=document.getElementById("installBanner"); if(b)b.remove(); });
+    var b=document.getElementById("installBanner"); if(b)b.remove(); deferredInstall=null; actualizarBotonDescargar(); });
+  try{ matchMedia("(display-mode: standalone)").addEventListener("change", actualizarBotonDescargar); }catch(e){}
 }catch(e){}
 
 // init
@@ -3591,7 +3654,7 @@ if(!loadSaved()){ seed(); projectId=newProjectId(); projectName="Casa de ejemplo
 normalizeDoc(doc);
 aplicarModo();
 setTool("select");
-requestAnimationFrame(()=>{ updateScale(); fitView(); history=[snap()]; hi=0; updateProjLabel(); render(); scheduleSave();
+requestAnimationFrame(()=>{ updateScale(); fitView(); history=[snap()]; hi=0; updateProjLabel(); render(); scheduleSave(); actualizarBotonDescargar();
   if(!settings.tutoVisto) showTutorial();
   setTimeout(showInstallPrompt, settings.tutoVisto?1500:3000); }); // iOS y Android-si-ya-disparó; espera al tutorial
 })();
