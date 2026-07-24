@@ -1,5 +1,5 @@
 <title>PlanEléctrico Pro — Editor de planos</title>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#0e1e39">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -322,6 +322,18 @@
   body.mobile #btnInstall{position:fixed;right:8px;top:calc(54px + env(safe-area-inset-top));
     z-index:44;background:var(--panel);box-shadow:0 4px 14px rgba(0,0,0,.35);
     font-size:12px;padding:6px 11px;min-height:34px;}
+  /* ===== Lupa de zona: pellizco-abrir sobre topbar/rail/panel agranda SOLO su contenido,
+     recortado dentro de su caja (nada más se mueve); pellizco-cerrar restaura ===== */
+  .lupaon{overflow:auto!important;overscroll-behavior:contain;scrollbar-width:thin;}
+  .lupaon>*{zoom:var(--lupak,1);}
+  /* los hijos que FLOTAN fixed sobre el lienzo en móvil no pertenecen al contenido de la lupa */
+  body.mobile .topbar.lupaon>#btnInstall,body.mobile .topbar.lupaon>#v3dctrl{zoom:1;}
+  #lupaChip{position:fixed;z-index:59;display:none;pointer-events:none;user-select:none;
+    background:var(--panel);border:1px solid var(--accent);color:var(--ink);
+    border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:700;white-space:nowrap;
+    transform:translateX(-50%);max-width:92vw;overflow:hidden;text-overflow:ellipsis;
+    box-shadow:0 6px 20px rgba(0,0,0,.35);}
+  #lupaChip b{font-family:var(--mono);color:var(--accent);}
 </style>
 
 <div class="topbar">
@@ -1598,14 +1610,127 @@ function endTouch(ev){
 window.addEventListener("pointerup",endTouch,true);
 window.addEventListener("pointercancel",endTouch,true);
 window.addEventListener("blur",()=>{ tPointers.clear(); pinch=null; wasPinch=false; smartGuides.length=0; });
-// --- Zoom nativo (pellizco) SOLO fuera del lienzo ---
-// En barras/paneles la letra es pequeña: dejamos que el pinch haga zoom nativo de página para poder leerla.
-// Sobre el lienzo/3D sí cancelamos el zoom nativo, para que su propio pinch (pointer events) no se duplique con la magnificación de WebKit.
+// --- Zoom nativo (pellizco) bloqueado en TODA la app ---
+// iPad ignora user-scalable=no en pestañas: el pinch achicaba la interfaz completa y desacomodaba
+// los módulos. Ahora cada zona interpreta su propio pellizco (lienzo/3D → zoom del plano;
+// barras/paneles → lupa de zona). Única excepción: si la página ya quedó atascada con zoom nativo
+// (scale≠1), se deja pasar el gesto para que el usuario pueda regresar a ×1.
+function zoomNativoAtascado(){ try{ return !!window.visualViewport&&Math.abs(visualViewport.scale-1)>0.02; }catch(e){ return false; } }
 ["gesturestart","gesturechange","gestureend"].forEach(t=>{
-  document.addEventListener(t,e=>{
-    if(e.target&&e.target.closest&&e.target.closest("#canvas,#view3d")) e.preventDefault();
-  },{passive:false});
+  document.addEventListener(t,e=>{ if(!zoomNativoAtascado()) e.preventDefault(); },{passive:false});
 });
+document.addEventListener("touchmove",e=>{
+  if(e.touches.length>=2&&!zoomNativoAtascado()) e.preventDefault();
+},{passive:false});
+
+// --- Lupa de zona: pellizco-abrir sobre un módulo (topbar/rail/panel) agranda SOLO su contenido ---
+// El módulo conserva su caja exacta: lo agrandado se recorta dentro y se alcanza con scroll.
+// Solo una zona a la vez (pellizcar otra restaura la anterior); pellizco-cerrar vuelve a ×1.
+// Motor por TOUCH events (no pointer): en Safari el primer scroll nativo dispara pointercancel y
+// mataría el gesto; los touch sobreviven. La membresía es por coordenadas ACTUALES (un dedo que ya
+// salió arrastrando una ficha no cuenta) y el pinch se confirma recién al variar la distancia >10px,
+// para que dos taps simultáneos (dos pulgares rápidos) sigan siendo dos taps normales.
+const LUPA_MAX=2.6;
+const LUPA_ZONAS=[document.querySelector(".topbar"),document.getElementById("rail"),document.getElementById("side")].filter(Boolean);
+const lupaOK=(function(){ try{ return CSS.supports("zoom","2"); }catch(e){ return false; } })();
+let lupaPinch=null;   // {zona,ids:[a,b],d0,k0,activo}
+let lupaClickT=0;     // supresión de taps fantasma justo tras pellizcar
+let lupaChipTimer=0;
+function lupaK(z){ return parseFloat(z.style.getPropertyValue("--lupak"))||1; }
+function lupaChipMuestra(zona,k){
+  let c=document.getElementById("lupaChip");
+  if(!c){ c=document.createElement("div"); c.id="lupaChip"; c.setAttribute("aria-hidden","true"); document.body.appendChild(c); }
+  c.innerHTML="🔍 <b>×"+k.toFixed(1)+"</b> · pellizca hacia adentro para volver";
+  c.style.display="block";
+  const r=zona.getBoundingClientRect(), w=c.offsetWidth; // clamp: visible aunque la zona pegue al borde
+  c.style.left=Math.round(Math.min(Math.max(r.left+r.width/2,8+w/2),innerWidth-8-w/2))+"px";
+  c.style.top=Math.round(Math.max(8,r.top+8))+"px";
+  clearTimeout(lupaChipTimer); lupaChipTimer=setTimeout(()=>{ c.style.display="none"; },1500);
+}
+function lupaOcultaChip(){ clearTimeout(lupaChipTimer);
+  const c=document.getElementById("lupaChip"); if(c) c.style.display="none"; }
+function lupaQuitar(zona){
+  if(!zona||!zona.classList.contains("lupaon")) return;
+  zona.classList.remove("lupaon"); zona.style.removeProperty("--lupak");
+  if(zona.classList.contains("topbar")) zona.style.removeProperty("height");
+  const s=zona.__lupaScroll||{l:0,t:0}; zona.scrollLeft=s.l; zona.scrollTop=s.t; // no pierde dónde estaba
+  lupaOcultaChip();
+}
+function lupaAplicar(zona,k){
+  k=Math.max(1,Math.min(LUPA_MAX,k));
+  if(k<=1.02){ lupaQuitar(zona); return; }
+  if(!zona.classList.contains("lupaon")){
+    zona.__lupaScroll={l:zona.scrollLeft,t:zona.scrollTop};
+    // la topbar es la única zona cuya caja la define su contenido: se congela para que nada se mueva
+    if(zona.classList.contains("topbar")) zona.style.height=zona.offsetHeight+"px";
+    zona.classList.add("lupaon");
+  }
+  zona.style.setProperty("--lupak",k.toFixed(3));
+  lupaChipMuestra(zona,k);
+}
+function lupaTouchesEnZona(zona,e){
+  // doble condición: nació en la zona (target) Y sigue físicamente dentro de su caja (coords).
+  // Excluye al dedo que salió arrastrando una ficha y al que dibuja en el lienzo pasando por encima.
+  const r=zona.getBoundingClientRect(); const res=[];
+  for(let i=0;i<e.touches.length;i++){ const t=e.touches[i];
+    if(zona.contains(t.target)&&t.clientX>=r.left&&t.clientX<=r.right&&t.clientY>=r.top&&t.clientY<=r.bottom) res.push(t); }
+  return res;
+}
+const lupaDist=(a,b)=>Math.max(1,Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY));
+const lupaBusca=(e,id)=>{ for(let i=0;i<e.touches.length;i++) if(e.touches[i].identifier===id) return e.touches[i]; return null; };
+LUPA_ZONAS.forEach(zona=>{
+  zona.addEventListener("touchstart",e=>{
+    if(!lupaOK) return;
+    const dentro=lupaTouchesEnZona(zona,e);
+    if(dentro.length!==2) return;
+    if(lupaPinch&&lupaPinch.activo&&lupaPinch.zona===zona) return; // ya hay pinch corriendo aquí
+    lupaPinch={zona,ids:[dentro[0].identifier,dentro[1].identifier],
+      d0:lupaDist(dentro[0],dentro[1]),k0:lupaK(zona),activo:false};
+  },{capture:true,passive:true});
+  zona.addEventListener("touchmove",e=>{
+    if(!lupaPinch||lupaPinch.zona!==zona) return;
+    const a=lupaBusca(e,lupaPinch.ids[0]), b=lupaBusca(e,lupaPinch.ids[1]);
+    if(!a||!b) return;
+    const d=lupaDist(a,b);
+    if(!lupaPinch.activo){
+      if(Math.abs(d-lupaPinch.d0)<=10) return; // aún puede ser un par de taps: no comprometerse
+      lupaPinch.activo=true;
+      // ahora sí es un pellizco: cancelar la ficha a medias y restaurar las demás zonas
+      if(dragFicha){ dragFicha=null; const g=ghostEl(); if(g){ g.style.display="none"; g.className=""; }
+        if(hoverSnap){ hoverSnap=null; render(true); } }
+      LUPA_ZONAS.forEach(z2=>{ if(z2!==zona) lupaQuitar(z2); }); // solo una zona a la vez
+    }
+    lupaAplicar(zona,lupaPinch.k0*(d/lupaPinch.d0));
+    lupaClickT=Date.now();
+    e.preventDefault();
+  },{capture:true,passive:false});
+  // al soltar el pellizco, el tap fantasma no debe activar botones de la zona
+  zona.addEventListener("click",ev=>{
+    if((lupaPinch&&lupaPinch.activo)||Date.now()-lupaClickT<420){ ev.stopPropagation(); ev.preventDefault(); }
+  },true);
+});
+function lupaFinTouch(e){
+  if(!lupaPinch) return;
+  const vivos=[]; for(let i=0;i<e.touches.length;i++) vivos.push(e.touches[i].identifier);
+  const quedanIds=lupaPinch.ids.filter(id=>vivos.indexOf(id)>=0);
+  if(quedanIds.length===2) return;
+  if(lupaPinch.activo&&quedanIds.length===1){
+    // relevo de dedos: si hay otro dedo en la zona, re-basar para que el zoom no salte
+    const sup=lupaBusca(e,quedanIds[0]);
+    const dentro=lupaTouchesEnZona(lupaPinch.zona,e).filter(t=>t.identifier!==quedanIds[0]);
+    if(sup&&dentro.length){ lupaPinch.ids=[quedanIds[0],dentro[0].identifier];
+      lupaPinch.d0=lupaDist(sup,dentro[0]); lupaPinch.k0=lupaK(lupaPinch.zona); return; }
+  }
+  const z=lupaPinch.zona, fueActivo=lupaPinch.activo; lupaPinch=null;
+  if(fueActivo){ lupaClickT=Date.now(); // la ventana anti-fantasma corre desde el FIN del gesto
+    if(lupaK(z)<1.15) lupaQuitar(z); } // quedó casi en ×1 → restaurar del todo
+}
+window.addEventListener("touchend",lupaFinTouch,true);
+window.addEventListener("touchcancel",lupaFinTouch,true);
+window.addEventListener("blur",()=>{ lupaPinch=null; });
+// la lupa es una ayuda de lectura: al rotar el dispositivo su geometría congelada deja de valer
+try{ (screen.orientation||matchMedia("(orientation: portrait)")).addEventListener("change",
+  ()=>LUPA_ZONAS.forEach(lupaQuitar)); }catch(e){}
 
 // --- doble tap = acercar · long-press = info del elemento (táctil) ---
 function tipCorto(host){ const k=host.getAttribute("data-kind"), id=host.getAttribute("data-id");
@@ -3121,15 +3246,29 @@ function soltarFicha(ev,cancelado){
 function activarDragFicha(btn,cat){
   btn.classList.add("ficha");
   btn.addEventListener("pointerdown",ev=>{
+    if(lupaPinch&&lupaPinch.activo) return; // pellizco de lupa en curso = no arrastre
+    btn.__suprimeClick=false; // sana cualquier bandera huérfana de un gesto anterior
     dragFicha={cat,btn,id:ev.pointerId,x0:ev.clientX,y0:ev.clientY,activo:false};
     try{ btn.setPointerCapture(ev.pointerId); }catch(e){} });
   btn.addEventListener("pointermove",ev=>{
     if(!dragFicha||dragFicha.id!==ev.pointerId) return;
     if(dragFicha.scroll){ // bandeja móvil: el scroll ya no es nativo (touch-action:none), lo hacemos aquí
-      const rl=document.getElementById("rail"); rl.scrollLeft+=dragFicha.lx-ev.clientX; dragFicha.lx=ev.clientX; return; }
+      const rl=document.getElementById("rail");
+      rl.scrollLeft+=dragFicha.lx-ev.clientX; dragFicha.lx=ev.clientX;
+      if(dragFicha.ejeLibre){ // rail con lupa: también scroll vertical, y si el dedo SALE del dock → arrastre real
+        rl.scrollTop+=dragFicha.ly-ev.clientY; dragFicha.ly=ev.clientY;
+        const r=rl.getBoundingClientRect();
+        if(ev.clientX<r.left-6||ev.clientX>r.right+6||ev.clientY<r.top-6||ev.clientY>r.bottom+6){
+          dragFicha.scroll=false; dragFicha.ejeLibre=false; dragFicha.activo=true; mostrarGhost(cat);
+          try{ navigator.vibrate&&navigator.vibrate(8); }catch(e){} } }
+      if(!dragFicha.activo) return; }
     if(!dragFicha.activo){
       const dx=ev.clientX-dragFicha.x0, dy=ev.clientY-dragFicha.y0;
       if(Math.hypot(dx,dy)<10) return;
+      const rl=document.getElementById("rail");
+      if(rl&&rl.classList.contains("lupaon")&&rl.contains(btn)){
+        // con la lupa activa, mover el dedo DENTRO del dock desplaza el contenido agrandado
+        dragFicha.scroll=true; dragFicha.ejeLibre=true; dragFicha.lx=ev.clientX; dragFicha.ly=ev.clientY; return; }
       if(document.body.classList.contains("mobile")&&Math.abs(dx)>Math.abs(dy)){
         dragFicha.scroll=true; dragFicha.lx=ev.clientX; return; } // horizontal = desplazar la bandeja
       dragFicha.activo=true; mostrarGhost(cat);
@@ -3630,7 +3769,9 @@ function seed(){ const s=[[0,0],[500,0],[500,400],[0,400]].map(([x,y])=>{const i
   doc.labels.push({id:uid("l"),x:250,y:120,text:"Sala"});
 }
 function esMovil(){ try{ return (matchMedia("(pointer:coarse)").matches&&innerWidth<=1100)||innerWidth<=900; }catch(e){ return innerWidth<=900; } }
-function aplicarModo(){ document.body.classList.toggle("mobile",esMovil()); }
+function aplicarModo(){ const m=esMovil(), antes=document.body.classList.contains("mobile");
+  document.body.classList.toggle("mobile",m);
+  if(antes!==m) LUPA_ZONAS.forEach(lupaQuitar); } // la lupa no sobrevive al cambio de layout
 let sheetState="peek";
 function setSheet(st){ sheetState=st; const sd=document.querySelector(".side"); if(!sd)return;
   sd.classList.toggle("mid",st==="mid"); sd.classList.toggle("full",st==="full"); actualizarSheetHint(); }
@@ -3675,6 +3816,7 @@ document.getElementById("sheethint")?.addEventListener("click",()=>setSheet("mid
   h.addEventListener("pointerdown",ev=>{ y0=ev.clientY; st0=sheetState;
     try{ h.setPointerCapture(ev.pointerId); }catch(e){} });
   h.addEventListener("pointerup",ev=>{ if(y0==null)return;
+    if((lupaPinch&&lupaPinch.activo)||Date.now()-lupaClickT<420){ y0=null; return; } // fue pellizco de lupa, no gesto del asa
     const dy=ev.clientY-y0; y0=null;
     const orden=["peek","mid","full"]; let i=orden.indexOf(st0);
     if(dy<-35) i=Math.min(2,i+1); else if(dy>35) i=Math.max(0,i-1);
