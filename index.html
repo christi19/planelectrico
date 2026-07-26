@@ -3433,11 +3433,13 @@ async function exportMenu(){
   const pick=await pedirOpcion("⇩ Exportar",[
     {k:"pdf",txt:"📄 PDF con membrete — para el cliente"},
     {k:"json",txt:"💾 JSON — respaldo completo (incluye fotos)"},
+    {k:"cub",txt:"🧮 Cubicación → ElectroPlan (materiales JSON)"},
     {k:"svg",txt:"🖼 SVG vectorial"},
     {k:"png",txt:"🖼 PNG imagen"},
     {k:"dxf",txt:"📐 DXF — AutoCAD / LibreCAD"}]);
   if(!pick) return;
   if(pick==="pdf") printPDF(); else if(pick==="json") exportJSON();
+  else if(pick==="cub") exportBridgeJSON();
   else if(pick==="svg") exportSVG(); else if(pick==="png") exportPNG();
   else if(pick==="dxf") exportDXF(); }
 function exportDXF(){
@@ -3487,6 +3489,32 @@ async function exportJSON(){ setSave("busy","Empacando…");
   download((projectName||"plano").replace(/[^\wáéíóúñÁÉÍÓÚÑ -]/g,"")+".planelectrico.json","application/json",
     JSON.stringify({doc:d,settings,name:projectName},null,2));
   setSave("","Guardado"); }
+// Puente hacia ElectroPlan Pro (app React): solo cubicación, sin plano.
+// La mano de obra viaja aparte (labor) — nunca como material, para no duplicar IVA en la otra app.
+function exportBridgeJSON(){
+  const T=cotTotales();
+  const mats=[];
+  Object.keys(T.elemCount).forEach(t=>{
+    mats.push({ key:t, name:elInfo(t).name,
+      category: t==="panel"?"Tableros":"Dispositivos",
+      quantity:T.elemCount[t], unit:"c/u", unitCost:priceOf(t) });
+  });
+  if(T.cableTotal>0) mats.push({ key:"cable",
+    name:"Cable estimado por circuitos ("+T.cableTotal.toFixed(1)+" m)",
+    category:"Cables", quantity:Math.ceil(T.cableTotal), unit:"m", unitCost:settings.precioCableM });
+  if(T.tubM>0) mats.push({ key:"tubo",
+    name:"Tubería conduit dibujada (≈"+Math.ceil(T.tubM/3)+" tubos de 3 m)",
+    category:"Conduits", quantity:+T.tubM.toFixed(1), unit:"m", unitCost:settings.precioTuboM||0 });
+  const payload={ format:"planelectrico-cubicacion", version:1,
+    exportedAt:new Date().toISOString(),
+    source:{ app:"PlanElectricoPro", proyecto:projectName||"", moneda:settings.moneda,
+      pisos:(doc.pisos||[]).length||1 },
+    materials:mats,
+    labor:{ puntos:T.puntos, precioPunto:settings.precioPunto, manoObra:T.manoObra },
+    checksum:{ elemCost:T.elemCost, cableCost:T.cableCost, tubCost:T.tubCost, total:T.total } };
+  download((projectName||"plano").replace(/[^\wáéíóúñÁÉÍÓÚÑ -]/g,"")+".cubicacion.json",
+    "application/json",JSON.stringify(payload,null,2));
+}
 
 function decorarPlano(sc,vb){
   const u=vb.w/100; const g=el("g",{});
