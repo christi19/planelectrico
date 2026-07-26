@@ -788,7 +788,10 @@ function doSave(){ try{
       if(e)Object.assign(e,meta); else ix.push(meta);
       saveIndex(ix); lsSet("planelectrico:cur",projectId);
     }
-    setSave("","Guardado"); }
+    setSave("","Guardado");
+    // Embebida en ElectroPlan Pro (iframe same-origin): avisar cubicación fresca al padre.
+    if(window.parent!==window){ try{ window.parent.postMessage(
+      {type:"pep:cubicacion",version:1,payload:bridgePayload()},location.origin); }catch(e){} } }
   catch(e){ storageOK=false; setSave("err","Solo memoria"); } }
 function openProject(id,fit){ const raw=lsGet("planelectrico:proj:"+id); if(!raw) return false;
   try{ const s=JSON.parse(raw);
@@ -3491,7 +3494,7 @@ async function exportJSON(){ setSave("busy","Empacando…");
   setSave("","Guardado"); }
 // Puente hacia ElectroPlan Pro (app React): solo cubicación, sin plano.
 // La mano de obra viaja aparte (labor) — nunca como material, para no duplicar IVA en la otra app.
-function exportBridgeJSON(){
+function bridgePayload(){
   const T=cotTotales();
   const mats=[];
   Object.keys(T.elemCount).forEach(t=>{
@@ -3505,15 +3508,17 @@ function exportBridgeJSON(){
   if(T.tubM>0) mats.push({ key:"tubo",
     name:"Tubería conduit dibujada (≈"+Math.ceil(T.tubM/3)+" tubos de 3 m)",
     category:"Conduits", quantity:+T.tubM.toFixed(1), unit:"m", unitCost:settings.precioTuboM||0 });
-  const payload={ format:"planelectrico-cubicacion", version:1,
+  return { format:"planelectrico-cubicacion", version:1,
     exportedAt:new Date().toISOString(),
     source:{ app:"PlanElectricoPro", proyecto:projectName||"", moneda:settings.moneda,
       pisos:(doc.pisos||[]).length||1 },
     materials:mats,
     labor:{ puntos:T.puntos, precioPunto:settings.precioPunto, manoObra:T.manoObra },
     checksum:{ elemCost:T.elemCost, cableCost:T.cableCost, tubCost:T.tubCost, total:T.total } };
+}
+function exportBridgeJSON(){
   download((projectName||"plano").replace(/[^\wáéíóúñÁÉÍÓÚÑ -]/g,"")+".cubicacion.json",
-    "application/json",JSON.stringify(payload,null,2));
+    "application/json",JSON.stringify(bridgePayload(),null,2));
 }
 
 function decorarPlano(sc,vb){
@@ -3855,8 +3860,8 @@ window.addEventListener("resize",()=>{ updateScale(); if(v3d)build3d(); aplicarM
 try{ if(window.visualViewport){ const vvSync=()=>updateScale();
   visualViewport.addEventListener("resize",vvSync); visualViewport.addEventListener("scroll",vvSync); } }catch(_){}
 
-// PWA: service worker SOLO en hosting propio (nunca en el visor de artifacts)
-try{ if("serviceWorker" in navigator && location.protocol.indexOf("http")===0 &&
+// PWA: service worker SOLO en hosting propio (nunca en el visor de artifacts ni embebida en iframe)
+try{ if(window.parent===window && "serviceWorker" in navigator && location.protocol.indexOf("http")===0 &&
   !/claude|anthropic|usercontent|localhost/i.test(location.hostname)){
   navigator.serviceWorker.register("sw.js").catch(function(){}); } }catch(e){}
 
