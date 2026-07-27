@@ -1044,9 +1044,12 @@ function render(skipPanel){
   doc.walls.forEach(w=>{ if(enPiso(w)){ nodosPiso.add(w.a); nodosPiso.add(w.b);
     const Lw=wallLen(w); if(Lw>(nodoL[w.a]||0))nodoL[w.a]=Lw; if(Lw>(nodoL[w.b]||0))nodoL[w.b]=Lw; } });
   if(draft&&draft.startNode) nodosPiso.add(draft.startNode);
+  // Mientras se traza una pared, TODAS las anclas del piso se ven: el imán (nearestNode)
+  // apunta a cualquiera de ellas y un imán invisible desconcierta; el LOD rige al terminar.
+  const trazandoPared=!!(draft&&draft.type==="wall");
   if(!vistaCliente) Object.keys(doc.nodes).forEach(id=>{ if(!nodosPiso.has(id))return;
     const esDraft=draft&&(id===draft.startNode||id===draft.firstNode);
-    if(!esDraft&&(nodoL[id]||0)*scale<48) return; // LOD: sin espacio no hay ancla
+    if(!esDraft&&!trazandoPared&&(nodoL[id]||0)*scale<48) return; // LOD: sin espacio no hay ancla
     const n=doc.nodes[id];
     // Ancla estilo Illustrator: radio constante en pantalla (5px) y borde de 2px reales.
     // OJO: con vector-effect el stroke-width se lee en px de PANTALLA — nunca dividirlo
@@ -1498,10 +1501,11 @@ let tool="select";
 let action=null; // {type,...}
 let fmtClip=null, pintarFormato=false; // cuentagotas / copiar formato
 let smartGuides=[]; // guías inteligentes (magenta) mientras se arrastra
+let paredPressId=null; // pointer que inició el gesto de pared EN el lienzo (el up solo fija tramo si nació aquí)
 let vistaCliente=false; // ✨ plano limpio para enseñar al cliente (oculta cotas, anclas y técnica)
 // Cursor flecha negra estilo Illustrator para "Elegir" (solo escritorio; en táctil no hay cursor)
 const ARROW_CUR="url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='22'%20height='22'%20viewBox='0%200%2024%2024'%3E%3Cpath%20d='M4%203L4%2019L8.5%2015L11%2021L14%2020L11.5%2014L18%2014Z'%20fill='%23000'%20stroke='%23fff'%20stroke-width='1.3'%20stroke-linejoin='round'/%3E%3C/svg%3E\") 4 3, default";
-function setTool(t){ const bothSel=(tool==="select"||tool==="marquee")&&(t==="select"||t==="marquee"); tool=t; draft=null; pendingPlace=null; if(!bothSel) setSel([]); pintarFormato=false;
+function setTool(t){ const bothSel=(tool==="select"||tool==="marquee")&&(t==="select"||t==="marquee"); tool=t; draft=null; pendingPlace=null; pruneNodes(); if(!bothSel) setSel([]); pintarFormato=false;
   if(CATS[t]&&!settings.dragVisto){ settings.dragVisto=true; scheduleSave();
     avisar("💡 Tip: también podés ARRASTRAR la ficha de la barra directo al plano, como en Duolingo."); }
   document.querySelectorAll(".tool").forEach(b=>b.classList.toggle("on",b.dataset.tool===t));
@@ -1602,6 +1606,7 @@ svg.addEventListener("pointerdown",ev=>{
     // si llega el 2º dedo A MITAD de un arrastre, consolidar el movimiento parcial (punto de undo + autosave)
     if(action&&action.moved) pushHistory();
     action=null; smartGuides.length=0;
+    paredPressId=null; // los ups del pellizco se cortan en captura y jamás llegan a onUp: sin esto el id quedaría rancio
     if(draft&&draft.type!=="wall") draft=null; // el pellizco no debe crear cuartos/cotas a medias
     const pts=[...tPointers.values()];
     pinch={d0:Math.max(1,Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y)),
@@ -1641,6 +1646,8 @@ function endTouch(ev){
 window.addEventListener("pointerup",endTouch,true);
 window.addEventListener("pointercancel",endTouch,true);
 window.addEventListener("blur",()=>{ tPointers.clear(); pinch=null; wasPinch=false; smartGuides.length=0; });
+// gesto cancelado por el sistema (notificación, gesto del SO): el press de pared muere con él
+window.addEventListener("pointercancel",ev=>{ if(ev.pointerId===paredPressId) paredPressId=null; });
 // --- Zoom nativo (pellizco) bloqueado en TODA la app ---
 // iPad ignora user-scalable=no en pestañas: el pinch achicaba la interfaz completa y desacomodaba
 // los módulos. Ahora cada zona interpreta su propio pellizco (lienzo/3D → zoom del plano;
@@ -1904,6 +1911,8 @@ function onDown(ev){
   if(tool==="wall"){
     // El tramo se fija al SOLTAR (commitTramoPared en onUp): así funciona el clic-clic
     // de siempre Y el arrastre estilo Illustrator (apretar, estirar, soltar = ancla).
+    if(ev.button!==0) return; // solo botón izquierdo/tap dibuja
+    paredPressId=ev.pointerId; // el gesto nació en el lienzo: este down legitima el próximo up
     if(!draft){ const sp=snapWorld(w,null); const an=sp.node||findOrCreateNode({x:sp.x,y:sp.y});
       draft={type:"wall",start:N(an),startNode:an,firstNode:an,cursor:N(an),created:[]}; render(); }
     return; }
@@ -2087,11 +2096,18 @@ function onMove(ev){
     if(draft.type==="route"){ draft.cursor=snapRoutePoint(w); render(); return; }
     if(draft.type==="opening"){ const wl=doc.walls.find(x=>x.id===draft.wallId);
       if(wl){ const pr=projectOnWall(wl,w); draft.d1=pr.t*wallLen(wl); } render(); return; }
+    if(draft.type==="wall"){
+      // Paridad con commitTramoPared: mismo imán (sin excluir el ancla propia) y misma
+      // precedencia — el nodo imantado GANA sobre 45°/ref. El preview muestra lo que se creará;
+      // sobre el ancla propia la goma colapsa a 0 (= el commit no creará nada, guard bn===an).
+      const spw=snapWorld(w,null);
+      let bb;
+      if(spw.node){ bb={x:spw.x,y:spw.y}; }
+      else { bb=applyLock(draft.start,spw,ev.shiftKey); bb=refSnapPoint(draft.start,bb); }
+      draft.refMatch=!!bb.refMatch; draft.cursor=bb;
+      render(true); return; } // preview liviano: sin reconstruir panel/ctxbar en cada move (paridad con los drags)
     const sp=snapWorld(w, draft.startNode);
-    if(draft.type==="wall"){ let bb=applyLock(draft.start,sp,ev.shiftKey);
-      if(!sp.node) bb=refSnapPoint(draft.start,bb);
-      draft.refMatch=!!bb.refMatch; draft.cursor=bb; }
-    else draft.cursor={x:sp.x,y:sp.y}; render(); return; }
+    draft.cursor={x:sp.x,y:sp.y}; render(); return; }
   // hover snap feedback
   if(tool==="wall"||tool==="room"||tool==="dim"){ snapWorld(w,null); }
 }
@@ -2130,7 +2146,11 @@ function onUp(ev){
     if(action.moved){ pushHistory(); }
     action=null; hoverSnap=null; smartGuides.length=0; render(); return;
   }
-  if(draft&&(draft.type==="wall")){ commitTramoPared(ev); return; }
+  if(draft&&(draft.type==="wall")){
+    // Solo fija el tramo si el gesto nació en el lienzo (onDown lo armó): un pointerup
+    // sobre botones/paneles de la UI ya no crea paredes fantasma hacia esa posición.
+    if(paredPressId!==null&&ev.pointerId===paredPressId){ paredPressId=null; commitTramoPared(ev); }
+    return; }
   if(draft&&(draft.type==="room")){ commitRoom(); }
   if(draft&&(draft.type==="dim")){ commitDim(); }
   if(draft&&(draft.type==="stair")&&draft.cursor){ commitStair(); }
