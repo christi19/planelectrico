@@ -165,6 +165,21 @@
     border-radius:6px;color:var(--ink);padding:3px 4px;text-align:right;font-size:12px;}
   .cartrow .cs{flex:none;min-width:56px;text-align:right;font-variant-numeric:tabular-nums;
     font-family:var(--mono);font-size:12.5px;}
+  /* Materiales propios: nombre en su propia línea (los de ferretería son largos) y los
+     controles debajo, con área táctil de dedo — se usa en el celular, en obra. */
+  .matrow{display:grid;grid-template-columns:26px 1fr auto;gap:4px 8px;align-items:center;
+    padding:8px 0;border-bottom:1px solid var(--line);}
+  .matrow .mi{font-size:18px;text-align:center;}
+  .matrow .mn{min-width:0;font-size:12.5px;font-weight:600;line-height:1.3;overflow-wrap:anywhere;}
+  .matrow .mn small{display:block;color:var(--soft);font-size:10.5px;font-weight:400;}
+  .matrow .mops{grid-column:2/4;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .matrow input,.matrow select{background:var(--panel2);border:1px solid var(--line);
+    border-radius:6px;color:var(--ink);padding:4px 6px;font-size:12.5px;min-height:32px;}
+  .matrow input{width:72px;text-align:right;font-variant-numeric:tabular-nums;}
+  .matrow .mx{color:var(--soft);font-size:12px;}
+  .matrow .ms{margin-left:auto;font-weight:800;font-family:var(--mono);font-size:12.5px;
+    font-variant-numeric:tabular-nums;}
+  .matrow .mdel{min-height:34px;min-width:38px;padding:2px 8px;justify-content:center;}
   #dragGhost{position:fixed;display:none;z-index:200;pointer-events:none;
     flex-direction:column;align-items:center;justify-content:center;gap:2px;
     width:64px;height:64px;border-radius:14px;background:var(--panel);
@@ -532,12 +547,32 @@ const CIRCUIT_COLORS=["#e0644f","#4fa0e0","#4cc38a","#e0b34f","#b07fe0","#4fd0cc
 const BREAKERS=[15,20,30,40,50];
 const AWG_BY_BREAKER={15:"#14",20:"#12",30:"#10",40:"#8",50:"#6"};
 // Estado del documento
-let doc={ nodes:{}, walls:[], openings:[], elements:[], dims:[], labels:[], circuits:[], routes:[], photos:[], precios:{}, stairs:[], texts:[] };
+let doc={ nodes:{}, walls:[], openings:[], elements:[], dims:[], labels:[], circuits:[], routes:[], photos:[], precios:{}, stairs:[], texts:[], materiales:[] };
 let settings={ grid:true, snap:true, lock45:false, gridSize:5, gridMajor:100, wallH:250, wallT:10,
-  moneda:"₡", precioPunto:15000, precioCableM:400, precioTuboM:570, desperdicio:10, voltaje:120, precios:{},
+  moneda:"₡", precioPunto:15000, precioCableM:400, precioTuboM:570, desperdicio:15, voltaje:120, precios:{},
+  cableXPuntoM:4, // holgura de conexión por punto (m). Estándar del oficio: 3,6–4,5 m por salida
+  catalogo:[], catalogoSembrado:false,
   roomShape:"rect", mNombre:"", mTel:"", mProyecto:"", varByCat:{} };
+// Precios de referencia de ferretería CR (EPA / Ecoplus, consultados 2026-07-12 — ver
+// docs/ANEXO-B-FUENTES.md). Son un punto de partida EDITABLE, no precios en vivo.
+const CATALOGO_CR=[
+  {nombre:"Cable THHN #12",            unidad:"m", precio:400,   categoria:"Cables"},
+  {nombre:'Tubo conduit PVC 1/2"',     unidad:"m", precio:567,   categoria:"Conduits"},
+  {nombre:"Caja rectangular",          unidad:"u", precio:560,   categoria:"Accesorios"},
+  {nombre:"Caja octagonal",            unidad:"u", precio:1230,  categoria:"Accesorios"},
+  {nombre:"Breaker 1x20 (QO)",         unidad:"u", precio:5395,  categoria:"Tableros"},
+  {nombre:"Breaker AFCI/GFCI 1x20",    unidad:"u", precio:32950, categoria:"Tableros"}
+];
+function sembrarCatalogo(){
+  if(settings.catalogoSembrado) return;      // una sola vez: si el usuario los borra, no vuelven
+  settings.catalogoSembrado=true;
+  if(!settings.catalogo.length && settings.moneda==="₡")
+    settings.catalogo=CATALOGO_CR.map(m=>Object.assign({id:uid("mat")},m));
+  scheduleSave();
+}
 function normalizeDoc(d){ d.circuits=d.circuits||[]; d.elements=d.elements||[]; d.routes=d.routes||[];
   d.photos=d.photos||[]; d.precios=d.precios||{}; d.stairs=d.stairs||[]; d.nodes=d.nodes||{}; d.walls=d.walls||[]; d.openings=d.openings||[];
+  d.materiales=d.materiales||[];
   d.dims=d.dims||[]; d.labels=d.labels||[]; d.texts=d.texts||[];
   d.elements.forEach(e=>{ if(e.circuitId===undefined)e.circuitId=null; });
   (d.circuits||[]).forEach((c,i)=>{ if(!c.fase) c.fase=(i%2?"B":"A"); });
@@ -586,15 +621,20 @@ function panelPos(){ const p=doc.elements.find(e=>e.type==="panel"); return p?{x
 // Cable por circuito: si hay TUBERÍA DIBUJADA para el circuito, manda la ruta real;
 // si no, estimación manhattan tablero→punto + 4 m de subida/bajada por punto
 function circuitRoutes(c){ return doc.routes.filter(r=>r.circuitId===c.id); }
+function cableXPuntoCm(){ return Math.max(0,+settings.cableXPuntoM||0)*CM_PER_M; }
 function circuitCableM(c){
+  // La holgura de conexión por punto es la MISMA por los dos caminos: antes, dibujar la
+  // tubería (el trabajo más cuidadoso) daba la mitad de holgura que no dibujarla, y el
+  // descargo prometía 4 m mientras el código ponía 2 → cotizaciones cortas de cable.
+  const perPt=cableXPuntoCm();
   const rs=circuitRoutes(c);
   if(rs.length){ let cm=rs.reduce((s,r)=>s+routeLen(r),0);
-    cm += circuitPoints(c)*200; // 2 m de conexión/bajada por punto
+    cm += circuitPoints(c)*perPt;
     return (cm/CM_PER_M)*(1+settings.desperdicio/100); }
   const p=panelPos(); if(!p) return 0;
   const pe=doc.elements.find(e=>e.type==="panel"); const pfl=pisoIdx(pe&&pe.piso);
   let cm=0; doc.elements.filter(e=>e.circuitId===c.id && esElectrico(e)).forEach(e=>{
-    cm += Math.abs(e.x-p.x)+Math.abs(e.y-p.y) + 400 + 260*Math.abs(pisoIdx(e.piso)-pfl); });
+    cm += Math.abs(e.x-p.x)+Math.abs(e.y-p.y) + perPt + 260*Math.abs(pisoIdx(e.piso)-pfl); });
   return (cm/CM_PER_M)*(1+settings.desperdicio/100); }
 function addCircuit(name,amps){ const c={id:uid("c"),name:name||("Circuito "+(doc.circuits.length+1)),
   amps:amps||20,color:CIRCUIT_COLORS[doc.circuits.length%CIRCUIT_COLORS.length],
@@ -785,6 +825,7 @@ function reindexIds(){ let mx=0; const scan=o=>{ const m=/(\d+)$/.exec(o||""); i
   ID=mx+1; }
 function normalizeSettings(saved){ if(saved&&!saved.moneda){ settings.moneda="$"; }
   settings.precios=settings.precios||{}; settings.varByCat=settings.varByCat||{};
+  settings.catalogo=settings.catalogo||[];
   if(settings.precioTuboM==null) settings.precioTuboM=DEF_MONEDA[settings.moneda].tubo;
   // auto-corrección: magnitudes que no corresponden a la moneda (p. ej. ₡570/m tubo con moneda $)
   const D=DEF_MONEDA[settings.moneda];
@@ -1516,6 +1557,7 @@ function applyLayers(){ ["structure","openings","electrical","labels","fondo"].f
 let tool="select";
 let action=null; // {type,...}
 let fmtClip=null, pintarFormato=false; // cuentagotas / copiar formato
+let matPickerAbierto=false; // selector de material del catálogo, dentro de la cotización
 let smartGuides=[]; // guías inteligentes (magenta) mientras se arrastra
 let paredPressId=null; // pointer que inició el gesto de pared EN el lienzo (el up solo fija tramo si nació aquí)
 let vistaCliente=false; // ✨ plano limpio para enseñar al cliente (oculta cotas, anclas y técnica)
@@ -2677,7 +2719,7 @@ function renderCircuits(p){
   // sin asignar
   const libres=doc.elements.filter(e=>esElectrico(e)&&!e.circuitId);
   if(libres.length) html+=`<p class="muted" style="margin-top:12px">⚠ <b>${libres.length}</b> punto(s) sin circuito. <button id="asigTodo" class="ghost" style="min-height:26px;padding:2px 8px">Asignar al 1º</button></p>`;
-  html+=`<div class="disclaimer">Cargas de referencia: toma 180 VA · lámpara 100 VA (NEC). La verificación del 80% es una guía visual — <b>no sustituye el cálculo del profesional responsable</b>. El cable es ESTIMACIÓN (en escuadra hasta el tablero, como se tiende el tubo, + 4 m por punto + ${settings.desperdicio}% desperdicio).</div>`;
+  html+=`<div class="disclaimer">Cargas de referencia: toma 180 VA · lámpara 100 VA (NEC). La verificación del 80% es una guía visual — <b>no sustituye el cálculo del profesional responsable</b>. El cable es ESTIMACIÓN (en escuadra hasta el tablero, como se tiende el tubo, + ${settings.cableXPuntoM} m por punto + ${settings.desperdicio}% desperdicio).</div>`;
   p.innerHTML=html;
   document.getElementById("addCir").onclick=()=>{ addCircuit(); pushHistory(); renderPanel(); };
   document.getElementById("verUni").onclick=showUnifilar;
@@ -2730,6 +2772,15 @@ function renderLayers(p){ const L=[["structure","🧱 Estructura (paredes)"],["o
 }
 
 // totales de cotización — única fuente de verdad (la usan renderCot, badge y toast)
+// Magnitudes del plano a las que un material puede atar su cantidad.
+function magnitudDe(atado,T){
+  if(atado==="cable_m") return T.cableTotal||0;
+  if(atado==="tubo_m")  return T.tubM||0;
+  if(atado==="puntos")  return T.puntos||0;
+  if(atado&&atado.indexOf("tipo:")===0) return (T.elemCount||{})[atado.slice(5)]||0;
+  return 0;
+}
+function cantMaterial(m,T){ return m&&m.atado?magnitudDe(m.atado,T):Math.max(0,+((m||{}).cant)||0); }
 function cotTotales(){
   const elemCount={}; doc.elements.forEach(e=>{ if(!elInfo(e.type).decorativo) elemCount[e.type]=(elemCount[e.type]||0)+1; });
   const elemCost=doc.elements.reduce((s,e)=>s+priceOf(e.type),0);
@@ -2739,14 +2790,24 @@ function cotTotales(){
   const manoObra=puntos*settings.precioPunto;
   const tubM=doc.routes.reduce((s,r)=>s+routeLen(r)/CM_PER_M,0);
   const tubCost=tubM*(settings.precioTuboM||0);
+  // Materiales propios del electricista. Si ata uno a los metros de cable o de tubo,
+  // ese material REEMPLAZA la línea automática: si no, el cable se cobraría dos veces.
+  const mats=doc.materiales||[];
+  const TM={cableTotal,tubM,puntos,elemCount};
+  const materialesCost=mats.reduce((s,m)=>s+cantMaterial(m,TM)*(Math.max(0,+m.precio)||0),0);
+  const cableReemplazado=mats.some(m=>m.atado==="cable_m");
+  const tuboReemplazado=mats.some(m=>m.atado==="tubo_m");
   return {elemCount,elemCost,cableTotal,cableCost,puntos,manoObra,tubM,tubCost,
-    items:doc.elements.filter(e=>!elInfo(e.type).decorativo).length,total:elemCost+cableCost+manoObra+tubCost};
+    materialesCost,cableReemplazado,tuboReemplazado,
+    items:doc.elements.filter(e=>!elInfo(e.type).decorativo).length,
+    total:elemCost+(cableReemplazado?0:cableCost)+manoObra+(tuboReemplazado?0:tubCost)+materialesCost};
 }
 
 function renderCot(p){
   const M=settings.moneda;
   const T=cotTotales();
-  const {elemCount,elemCost,cableTotal,cableCost,puntos,manoObra,tubM,tubCost,total}=T;
+  const {elemCount,elemCost,cableTotal,cableCost,puntos,manoObra,tubM,tubCost,total,
+    materialesCost,cableReemplazado,tuboReemplazado}=T;
   const cirRows=doc.circuits.map(c=>{ const m=circuitCableM(c);
     return `<tr><td><span style="color:${c.color}">⬤</span> ${c.name} (${c.amps}A · ${AWG_BY_BREAKER[c.amps]||"?"})</td><td class="n">${circuitPoints(c)} pts</td><td class="n">${m.toFixed(1)} m</td></tr>`; }).join("");
   const erows=Object.keys(elemCount).map(k=>{ const i=elInfo(k); const sinP=priceOf(k)===0;
@@ -2763,9 +2824,59 @@ function renderCot(p){
   const usados=Object.keys(elemCount);
   const catRows=usados.map(k=>`<tr><td>${elInfo(k).icon} ${elInfo(k).name}</td>
     <td class="n"><input data-price="${k}" type="number" value="${priceOf(k)}" style="width:92px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;color:var(--ink);padding:3px 6px;text-align:right"></td></tr>`).join("");
+  const TM={cableTotal,tubM,puntos,elemCount};
+  // De dónde sale la cantidad: a mano, o atada a una magnitud que el plano ya calcula.
+  const ATADURAS=[["","a mano"],["cable_m","metros de cable"],["tubo_m","metros de tubo"],
+    ["puntos","cantidad de puntos"]].concat(
+    Object.keys(elemCount).map(t=>["tipo:"+t,"cantidad de "+elInfo(t).name]));
+  const matRows=(doc.materiales||[]).map(m=>{
+    const q=cantMaterial(m,TM); const sub=q*(Math.max(0,+m.precio)||0);
+    const nota=m.atado
+      ? "🔗 del plano"+(m.atado==="cable_m"?" · incluye "+(settings.desperdicio||0)+"% desperdicio":"")
+      : (m.unidad==="m"?"por metro":"por unidad");
+    // el renglón guarda su COPIA del precio; si el catálogo cambió, se ofrece traerlo (nunca solo)
+    const cat=(settings.catalogo||[]).find(c=>c.id===m.catId);
+    const desfasado=cat&&(Math.max(0,+cat.precio)||0)!==(Math.max(0,+m.precio)||0);
+    return `<div class="matrow">
+      <span class="mi">${m.atado?"🔗":"🧰"}</span>
+      <div class="mn">${m.nombre}<small>${nota}</small></div>
+      <button data-mdel="${m.id}" class="ghost mdel" title="Quitar este material" aria-label="Quitar ${m.nombre}">🗑</button>
+      <div class="mops">
+        ${m.atado
+          ? `<span class="mx" title="Calculado del plano">${(Math.round(q*10)/10)} ${m.unidad}</span>`
+          : `<input data-mcant="${m.id}" type="number" min="0" step="0.1" value="${m.cant}" title="Cantidad (${m.unidad})" aria-label="Cantidad de ${m.nombre}">`}
+        <span class="mx">×</span>
+        <input data-mprecio="${m.id}" type="number" step="0.01" min="0" value="${m.precio}" title="Precio unitario (${M})" aria-label="Precio de ${m.nombre}">
+        <b class="ms">${mon(sub)}</b>
+        ${desfasado?`<button data-msync="${m.id}" class="ghost mdel" title="Tu catálogo dice ${mon(cat.precio)} — traer ese precio" aria-label="Traer el precio del catálogo para ${m.nombre}">↻</button>`:""}
+      </div>
+      <select data-matado="${m.id}" title="De dónde sale la cantidad" aria-label="Origen de la cantidad de ${m.nombre}" style="grid-column:2/4;max-width:100%">
+        ${ATADURAS.map(([v,t])=>`<option value="${v}"${(m.atado||"")===v?" selected":""}>${t}</option>`).join("")}
+      </select>
+    </div>`; }).join("");
+  const CATS_MAT=["Conduits","Cables","Dispositivos","Tableros","Accesorios"];
+  const catLista=(settings.catalogo||[]).map(c=>
+    `<button data-mcat="${c.id}" class="ghost" style="width:100%;justify-content:space-between;margin-bottom:4px;min-height:34px">
+       <span>${c.nombre}</span><b>${mon(c.precio)}/${c.unidad}</b></button>`).join("");
+  const picker=matPickerAbierto?`<div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:8px;background:var(--panel2)">
+      <input id="matBuscar" type="search" placeholder="Buscar en mi catálogo…" style="width:100%;margin-bottom:8px">
+      <div id="matLista">${catLista||'<div class="muted">Tu catálogo está vacío.</div>'}</div>
+      <div class="kdt sec" style="margin:10px 0 6px">＋ Crear material nuevo</div>
+      <input id="matNuevoNombre" placeholder="Nombre (ej. Tubo EMT 1/2&quot;)" style="width:100%;margin-bottom:6px">
+      <div class="row" style="margin-bottom:6px">
+        <div class="field" style="margin:0"><label>Precio (${M})</label><input id="matNuevoPrecio" type="number" min="0" step="0.01" value="0"></div>
+        <div class="field" style="margin:0"><label>Unidad</label><select id="matNuevaUnidad"><option value="u">unidad</option><option value="m">metro</option></select></div>
+      </div>
+      <div class="field" style="margin:0 0 8px"><label>Categoría</label><select id="matNuevaCat">${CATS_MAT.map(c=>`<option value="${c}">${c}</option>`).join("")}</select></div>
+      <button id="matCrear" style="width:100%;justify-content:center;min-height:34px">＋ Crear y agregar</button>
+    </div>`:"";
   p.innerHTML=`<div class="cottotal"><span class="kdt">🧾 ${T.items} producto${T.items===1?"":"s"} · ${puntos} pts</span><b>${mon(total)}</b></div>
     <div class="kdt sec" style="margin:2px 0 8px">🧾 Productos del plano</div>
     <div>${erows||'<div class="muted" style="padding:10px 0">Carrito vacío — tocá 🔌 💡 🎚️ en la barra y tocá el plano para añadir productos.</div>'}</div>
+    <div class="kdt sec sep" style="margin:14px 0 8px">🧰 Materiales</div>
+    <div>${matRows||'<div class="muted" style="padding:8px 0">Sin materiales propios todavía.</div>'}</div>
+    <button id="matAdd" class="ghost" style="width:100%;justify-content:center;margin-top:6px;min-height:34px">＋ Agregar material</button>
+    ${picker}
     <div class="kdt sec sep" style="margin:14px 0 8px">🔧 Servicios estimados — cable por circuito</div>
     <table class="cot"><tbody>${cirRows||'<tr><td colspan="3" class="muted">Sin circuitos — créalos en ⚡ Circuitos</td></tr>'}
     ${cirRows?`<tr><td><b>Cable total</b></td><td></td><td class="n"><b>${cableTotal.toFixed(1)} m · ${mon(cableCost)}</b></td></tr>`:""}</tbody></table>
@@ -2773,8 +2884,9 @@ function renderCot(p){
     ${avisosHTML}
     <table class="cot"><tbody>
       <tr><td>Materiales (dispositivos)</td><td></td><td class="n">${mon(elemCost)}</td></tr>
-      <tr><td>Cable (${cableTotal.toFixed(0)} m est.)</td><td></td><td class="n">${mon(cableCost)}</td></tr>
-      ${tubM>0?`<tr><td>Tubería dibujada (${tubM.toFixed(1)} m ≈ ${Math.ceil(tubM/3)} tubos de 3 m)</td><td></td><td class="n">${mon(tubCost)}</td></tr>`:""}
+      <tr${cableReemplazado?' style="opacity:.55;text-decoration:line-through"':''}><td>Cable (${cableTotal.toFixed(0)} m est.)${cableReemplazado?' <small style="text-decoration:none;opacity:.9">— reemplazado por tus materiales</small>':''}</td><td></td><td class="n">${mon(cableCost)}</td></tr>
+      ${tubM>0?`<tr${tuboReemplazado?' style="opacity:.55;text-decoration:line-through"':''}><td>Tubería dibujada (${tubM.toFixed(1)} m ≈ ${Math.ceil(tubM/3)} tubos de 3 m)${tuboReemplazado?' <small style="text-decoration:none;opacity:.9">— reemplazada por tus materiales</small>':''}</td><td></td><td class="n">${mon(tubCost)}</td></tr>`:""}
+      ${materialesCost>0?`<tr><td>Materiales propios</td><td></td><td class="n">${mon(materialesCost)}</td></tr>`:""}
       <tr><td>Mano de obra (${puntos} puntos × ${mon(settings.precioPunto)})</td><td></td><td class="n">${mon(manoObra)}</td></tr>
     </tbody><tfoot><tr><td>TOTAL</td><td></td><td class="n">${mon(total)}</td></tr></tfoot></table>
     <div class="kdt sec sep" style="margin:14px 0 8px">⚙ Parámetros</div>
@@ -2787,12 +2899,15 @@ function renderCot(p){
       <div class="field" style="margin:0"><label>% desperd.</label><input id="c_dp" type="number" value="${settings.desperdicio}"></div>
       <div class="field" style="margin:0"><label>${M}/m tubo</label><input id="c_pt" type="number" step="0.1" value="${settings.precioTuboM}"></div>
     </div>
+    <div class="row" style="margin-bottom:10px">
+      <div class="field" style="margin:0"><label>m de cable por punto</label><input id="c_cxp" type="number" min="0" step="0.5" value="${settings.cableXPuntoM}" title="Holgura de conexión en cada salida (caja, empalme, bajada). El oficio usa 3,6–4,5 m"></div>
+    </div>
     <details style="margin-top:12px"><summary style="cursor:pointer;color:var(--accent);font-weight:700;font-size:12.5px;padding:9px;border:1px dashed var(--accent);border-radius:8px;text-align:center;list-style:none">✎ CATÁLOGO DE PRECIOS DE ESTE PROYECTO (${M})</summary>
       <table class="cot" style="margin-top:8px"><tbody>${catRows||`<tr><td class="muted">Coloca elementos en el plano y aparecerán aquí para ponerles precio.</td></tr>`}</tbody></table>
       <button id="catReset" class="ghost" style="width:100%;justify-content:center;margin-top:6px;min-height:30px">↺ Restaurar precios de fábrica</button>
     </details>
     <button id="cotExp" style="width:100%;justify-content:center;margin-top:14px">⇩ Exportar cotización (CSV)</button>
-    <div class="disclaimer">Toda cantidad es <b>ESTIMACIÓN revisable</b>: ajusta tu catálogo de precios antes de enviarla al cliente. Los precios de fábrica en ₡ son referencias aproximadas de ferretería CR (jul-2026) — edítalos con TUS precios. El cable se estima en escuadra hasta el tablero (horizontal + vertical, como se tiende el tubo) + 4 m por punto + desperdicio.</div>`;
+    <div class="disclaimer">Toda cantidad es <b>ESTIMACIÓN revisable</b>: ajusta tu catálogo de precios antes de enviarla al cliente. Los precios de fábrica en ₡ son referencias aproximadas de ferretería CR (jul-2026) — edítalos con TUS precios. El cable se estima en escuadra hasta el tablero (horizontal + vertical, como se tiende el tubo) + ${settings.cableXPuntoM} m por punto + ${settings.desperdicio}% desperdicio. Si dibujás la tubería, se usa su recorrido real en vez de la escuadra.</div>`;
   const gc=p.querySelector("[data-gocir]"); if(gc) gc.onclick=()=>abrirTab("cir");
   document.getElementById("c_mon").onchange=e=>{ const nm=e.target.value;
     if(nm!==settings.moneda){ settings.moneda=nm; settings.precios={};
@@ -2801,10 +2916,56 @@ function renderCot(p){
   const upd=()=>{ settings.precioPunto=+document.getElementById("c_pp").value||0;
     settings.precioCableM=+document.getElementById("c_pc").value||0;
     settings.desperdicio=+document.getElementById("c_dp").value||0;
-    settings.precioTuboM=+document.getElementById("c_pt").value||0; scheduleSave(); renderPanel(); };
-  ["c_pp","c_pc","c_dp","c_pt"].forEach(id=>document.getElementById(id).onchange=upd);
+    settings.precioTuboM=+document.getElementById("c_pt").value||0;
+    settings.cableXPuntoM=Math.max(0,+document.getElementById("c_cxp").value||0);
+    scheduleSave(); renderPanel(); };
+  ["c_pp","c_pc","c_dp","c_pt","c_cxp"].forEach(id=>document.getElementById(id).onchange=upd);
   p.querySelectorAll("input[data-price]").forEach(inp=>inp.onchange=()=>{
     doc.precios[inp.dataset.price]=+inp.value||0; scheduleSave(); renderPanel(); });
+  // materiales propios: mismo trato que los precios (guardan y repintan; no entran al undo)
+  p.querySelectorAll("[data-mcant]").forEach(i=>i.onchange=()=>{
+    const m=(doc.materiales||[]).find(x=>x.id===i.dataset.mcant);
+    if(m){ m.cant=Math.max(0,+i.value||0); scheduleSave(); renderPanel(); } });
+  p.querySelectorAll("[data-mprecio]").forEach(i=>i.onchange=()=>{
+    const m=(doc.materiales||[]).find(x=>x.id===i.dataset.mprecio);
+    if(m){ m.precio=Math.max(0,+i.value||0); scheduleSave(); renderPanel(); } });
+  p.querySelectorAll("[data-msync]").forEach(b=>b.onclick=()=>{
+    const m=(doc.materiales||[]).find(x=>x.id===b.dataset.msync); if(!m) return;
+    const c=(settings.catalogo||[]).find(x=>x.id===m.catId); if(!c) return;
+    m.precio=Math.max(0,+c.precio)||0; scheduleSave(); renderPanel();
+    avisar("↻ Precio actualizado desde tu catálogo."); });
+  p.querySelectorAll("[data-matado]").forEach(s=>s.onchange=()=>{
+    const m=(doc.materiales||[]).find(x=>x.id===s.dataset.matado); if(!m) return;
+    if(!s.value){ m.cant=cantMaterial(m,TM); m.atado=null; }  // al desatar conserva lo calculado
+    else m.atado=s.value;
+    scheduleSave(); renderPanel(); });
+  const btnAdd=document.getElementById("matAdd");
+  if(btnAdd) btnAdd.onclick=()=>{ matPickerAbierto=!matPickerAbierto; renderPanel(); };
+  const agregarDesdeCat=c=>{ doc.materiales=doc.materiales||[];
+    doc.materiales.push({id:uid("dm"),catId:c.id,nombre:c.nombre,unidad:c.unidad,
+      precio:c.precio,cant:1,atado:null,categoria:c.categoria||"Accesorios"});
+    matPickerAbierto=false; scheduleSave(); renderPanel(); };
+  p.querySelectorAll("[data-mcat]").forEach(b=>b.onclick=()=>{
+    const c=(settings.catalogo||[]).find(x=>x.id===b.dataset.mcat); if(c) agregarDesdeCat(c); });
+  const bus=document.getElementById("matBuscar");
+  if(bus) bus.oninput=()=>{ const q=bus.value.toLowerCase();
+    p.querySelectorAll("[data-mcat]").forEach(b=>{
+      const c=(settings.catalogo||[]).find(x=>x.id===b.dataset.mcat);
+      b.style.display=(!q||(c&&c.nombre.toLowerCase().includes(q)))?"":"none"; }); };
+  const crear=document.getElementById("matCrear");
+  if(crear) crear.onclick=()=>{
+    const nombre=(document.getElementById("matNuevoNombre").value||"").trim();
+    if(!nombre){ avisar("Escribí el nombre del material."); return; }
+    const c={id:uid("mat"),nombre:nombre,
+      unidad:document.getElementById("matNuevaUnidad").value,
+      precio:Math.max(0,+document.getElementById("matNuevoPrecio").value||0),
+      categoria:document.getElementById("matNuevaCat").value};
+    settings.catalogo=settings.catalogo||[]; settings.catalogo.push(c);
+    agregarDesdeCat(c); };
+  p.querySelectorAll("[data-mdel]").forEach(b=>b.onclick=()=>{
+    const m=(doc.materiales||[]).find(x=>x.id===b.dataset.mdel); if(!m) return;
+    if(!confirm("¿Quitar \""+m.nombre+"\" de esta cotización?")) return;
+    doc.materiales=doc.materiales.filter(x=>x.id!==m.id); scheduleSave(); renderPanel(); });
   document.getElementById("catReset").onclick=()=>{ doc.precios={}; scheduleSave(); renderPanel(); };
   document.getElementById("cotExp").onclick=()=>{ let csv="Concepto,Cantidad,Costo ("+M+")\n";
     Object.keys(elemCount).forEach(k=>csv+=`${elInfo(k).name},${elemCount[k]}u,${Math.round(elemCount[k]*priceOf(k))}\n`);
@@ -3602,19 +3763,27 @@ function bridgePayload(){
       category: t==="panel"?"Tableros":"Dispositivos",
       quantity:T.elemCount[t], unit:"c/u", unitCost:priceOf(t) });
   });
-  if(T.cableTotal>0) mats.push({ key:"cable",
+  if(T.cableTotal>0 && !T.cableReemplazado) mats.push({ key:"cable",
     name:"Cable estimado por circuitos ("+T.cableTotal.toFixed(1)+" m)",
     category:"Cables", quantity:Math.ceil(T.cableTotal), unit:"m", unitCost:settings.precioCableM });
-  if(T.tubM>0) mats.push({ key:"tubo",
+  if(T.tubM>0 && !T.tuboReemplazado) mats.push({ key:"tubo",
     name:"Tubería conduit dibujada (≈"+Math.ceil(T.tubM/3)+" tubos de 3 m)",
     category:"Conduits", quantity:+T.tubM.toFixed(1), unit:"m", unitCost:settings.precioTuboM||0 });
+  // materiales propios del electricista: viajan como filas del puente (key "mat:*"),
+  // así la app madre los ve. Al reimportar reemplaza las pep_* y conserva sus mat_*.
+  const TMb={cableTotal:T.cableTotal,tubM:T.tubM,puntos:T.puntos,elemCount:T.elemCount};
+  (doc.materiales||[]).forEach(m=>{ const q=cantMaterial(m,TMb); if(q<=0) return;
+    mats.push({ key:"mat:"+m.id, name:m.nombre, category:m.categoria||"Accesorios",
+      quantity:+q.toFixed(2), unit:m.unidad==="m"?"m":"c/u",
+      unitCost:Math.max(0,+m.precio)||0 }); });
   return { format:"planelectrico-cubicacion", version:1,
     exportedAt:new Date().toISOString(),
     source:{ app:"PlanElectricoPro", proyecto:projectName||"", moneda:settings.moneda,
       pisos:(doc.pisos||[]).length||1 },
     materials:mats,
     labor:{ puntos:T.puntos, precioPunto:settings.precioPunto, manoObra:T.manoObra },
-    checksum:{ elemCost:T.elemCost, cableCost:T.cableCost, tubCost:T.tubCost, total:T.total } };
+    checksum:{ elemCost:T.elemCost, cableCost:T.cableReemplazado?0:T.cableCost,
+      tubCost:T.tuboReemplazado?0:T.tubCost, materialesCost:T.materialesCost, total:T.total } };
 }
 function exportBridgeJSON(){
   download((projectName||"plano").replace(/[^\wáéíóúñÁÉÍÓÚÑ -]/g,"")+".cubicacion.json",
@@ -3976,6 +4145,9 @@ try{
 // init
 if(window.parent!==window) document.documentElement.classList.add("embed"); // embebida en ElectroPlan Pro
 if(!loadSaved()){ seed(); projectId=newProjectId(); projectName="Casa de ejemplo"; }
+// El catálogo se siembra acá y no en normalizeSettings: un usuario NUEVO no tiene
+// config guardada, así que normalizeSettings ni siquiera se llama y se quedaría sin catálogo.
+settings.catalogo=settings.catalogo||[]; sembrarCatalogo();
 // Embebida: la app madre puede pedir un proyecto específico con ?proyecto=<nombre>
 try{ const qP=new URLSearchParams(location.search).get("proyecto");
   if(qP){ const ixQ=loadIndex(); const mQ=ixQ.find(p=>String(p.nombre||"").trim().toLowerCase()===qP.trim().toLowerCase());
