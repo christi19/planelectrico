@@ -995,9 +995,12 @@ function render(skipPanel){
     const L=wallLen(w); const mp=wallPointAt(w,L/2); const ang=mp.ang*180/Math.PI;
     if(L*scale>36/mfs()){ // LOD: ocultar medidas de paredes chicas en pantalla
     const t=el("text",{x:mp.x,y:mp.y,fill:"var(--ink)","font-size":13*mfs()/scale,
-      "text-anchor":"middle",dy:-(grosorDe(w)/2+6)/scale,style:"pointer-events:none;font-family:var(--mono)",
+      // el grosor es MUNDO (cm) y el margen PANTALLA (px): cada uno en su unidad.
+      // Antes se dividía todo entre scale y a zoom ≥420% la cota se metía dentro del muro.
+      "text-anchor":"middle",dy:-(grosorDe(w)/2+6/scale),style:"pointer-events:none;font-family:var(--mono)",
       transform:`rotate(${Math.abs(ang)>90?ang+180:ang} ${mp.x} ${mp.y})`});
-    t.textContent=fmt(L)+(w.curve?" ⌒":"")+(w.name?" · "+w.name:""); gWalls.appendChild(t); }
+    t.textContent=fmt(L)+(w.curve?" ⌒":"")+(w.name?" · "+w.name:"");
+    gDim.appendChild(t); } // va en la capa "Etiquetas, cotas y texto": es una anotación, no estructura
     // rombo de curvatura estilo Illustrator (pared seleccionada, herramienta Sel)
     if(isSel&&selection.length===1&&tool==="select"){
       const mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
@@ -1090,10 +1093,10 @@ function render(skipPanel){
     const degA=ang*180/Math.PI;
     if(o.width*scale>26/mfs()){
     const mt=el("text",{x:cx,y:cy,"font-size":11*mfs()/scale,fill:o.kind==="door"?"var(--soft)":"var(--blue)",
-      "text-anchor":"middle",dy:(grosorDe(w)/2+13)/scale,
+      "text-anchor":"middle",dy:(grosorDe(w)/2+13/scale), // grosor en cm + margen en px (ver cota de pared)
       style:"pointer-events:none;font-family:var(--mono)",
       transform:`rotate(${Math.abs(degA)>90?degA+180:degA} ${cx} ${cy})`});
-    mt.textContent=fmt(o.width); gOpen.appendChild(mt); }
+    mt.textContent=fmt(o.width); gDim.appendChild(mt); } // capa de etiquetas, igual que la cota de pared
     // zona de agarre central (mover a lo largo de la pared)
     gOpen.appendChild(el("circle",{cx,cy,r:Math.max(12/scale,hw*0.6),fill:"transparent",
       stroke:isSel?"var(--sel)":"transparent","stroke-width":2/scale,
@@ -1461,7 +1464,20 @@ function drawDraft(){
 }
 
 /* ==== detección de habitaciones (m²) — ciclos simples de 3-6 paredes ==== */
+// El DFS de ciclos es el coste dominante del render (medido: 56% del tiempo por
+// pointermove con 123 paredes) y la topología NO cambia entre movimientos del puntero:
+// se cachea por firma (mismo patrón que _cotSig). La firma cubre piso activo, qué paredes
+// hay y dónde están sus nodos — mover un ancla o deshacer la invalida sola.
+let _roomsSig=null, _roomsCache=[];
 function detectRooms(){
+  const sg=[doc.pisoActivo||"p1"];
+  for(const w of doc.walls){ if(!enPiso(w))continue; const a=N(w.a),b=N(w.b); if(!a||!b)continue;
+    sg.push(w.a,w.b,a.x,a.y,b.x,b.y); }
+  const sig=sg.join(",");
+  if(sig===_roomsSig) return _roomsCache;
+  _roomsSig=sig; _roomsCache=detectRoomsCalc(); return _roomsCache;
+}
+function detectRoomsCalc(){
   const adj={}; doc.walls.forEach(w=>{ if(!enPiso(w))return; (adj[w.a]=adj[w.a]||[]).push(w.b); (adj[w.b]=adj[w.b]||[]).push(w.a); });
   const rooms=[]; const seen=new Set();
   // buscar rectángulos/polígonos por DFS corto
@@ -2798,12 +2814,18 @@ function renderCot(p){
     csv+=`TOTAL,,${Math.round(total)}\n`; download("cotizacion-planelectrico.csv","text/csv",csv); };
 }
 
+// corre en CADA render (o sea en cada pointermove): sin el guard de firma reescribía el
+// innerHTML y re-enlazaba todos los handlers por movimiento, puro desperdicio
+let _flSig="";
 function renderFloorbar(){ const fb=document.getElementById("floorbar"); if(!fb) return;
   const ps=doc.pisos||[];
-  if(ps.length<=1){ fb.innerHTML='<button data-addfl="1" title="Agregar otra planta (piso)">🏢 ＋ Planta</button>'; }
-  else fb.innerHTML=ps.map(p=>`<button data-fl="${p.id}" class="${p.id===doc.pisoActivo?"on":""}" title="Doble clic: renombrar">${p.nombre}</button>`).join("")+
-    `<button data-ghost="1" class="${settings.ghostPiso!==false?"on":""}" title="Ver el piso de abajo como calco (con imán a sus paredes)">👻</button>`+
-    '<button data-addfl="1" title="Agregar planta">＋</button>';
+  const html=(ps.length<=1)
+    ? '<button data-addfl="1" title="Agregar otra planta (piso)">🏢 ＋ Planta</button>'
+    : ps.map(p=>`<button data-fl="${p.id}" class="${p.id===doc.pisoActivo?"on":""}" title="Doble clic: renombrar">${p.nombre}</button>`).join("")+
+      `<button data-ghost="1" class="${settings.ghostPiso!==false?"on":""}" title="Ver el piso de abajo como calco (con imán a sus paredes)">👻</button>`+
+      '<button data-addfl="1" title="Agregar planta">＋</button>';
+  if(html===_flSig) return; // nada cambió: los botones y sus handlers siguen vivos
+  _flSig=html; fb.innerHTML=html;
   fb.querySelectorAll("[data-fl]").forEach(b=>{
     b.onclick=()=>{ if(doc.pisoActivo!==b.dataset.fl){ doc.pisoActivo=b.dataset.fl; setSel([]); draft=null; scheduleSave(); fitView(); } };
     b.ondblclick=async ()=>{ const p=ps.find(x=>x.id===b.dataset.fl); if(!p)return;
@@ -2816,9 +2838,12 @@ function renderFloorbar(){ const fb=document.getElementById("floorbar"); if(!fb)
     doc.pisos.push(np); doc.pisoActivo=np.id; setSel([]); scheduleSave(); fitView();
     avisar("🏢 "+nombre+" creada — estás en ella (lienzo vacío). Doble clic en su botón para renombrarla."); };
 }
+let _statusSig="";
 function renderStatus(){ const s=document.getElementById("status");
-  s.innerHTML=`<span>zoom ${(100/vb.w*1400|0)/1}%</span><span>paredes ${doc.walls.length}</span><span>ref 1ª: ${doc.walls.length?fmt(wallLen(doc.walls[0])):"—"}</span>${(doc.pisos&&doc.pisos.length>1)?`<span>🏢 ${((doc.pisos.find(p=>p.id===doc.pisoActivo)||{}).nombre)||""}</span>`:""}
-  <span>escala 1px≈${(1/scale).toFixed(1)}cm</span><span>${storageOK?"autosave ✓":"memoria"}</span>`; }
+  const html=`<span>zoom ${(100/vb.w*1400|0)/1}%</span><span>paredes ${doc.walls.length}</span><span>ref 1ª: ${doc.walls.length?fmt(wallLen(doc.walls[0])):"—"}</span>${(doc.pisos&&doc.pisos.length>1)?`<span>🏢 ${((doc.pisos.find(p=>p.id===doc.pisoActivo)||{}).nombre)||""}</span>`:""}
+  <span>escala 1px≈${(1/scale).toFixed(1)}cm</span><span>${storageOK?"autosave ✓":"memoria"}</span>`;
+  if(html===_statusSig) return; // mismo texto: no rehacer el DOM en cada movimiento
+  _statusSig=html; s.innerHTML=html; }
 
 // badge del carrito en la pestaña Cotización — se actualiza en cada render (con guard de firma)
 let _cotSig="";
