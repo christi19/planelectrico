@@ -104,6 +104,8 @@
   .wall3d{background:var(--wall3d);border:1px solid rgba(0,0,0,.25);opacity:var(--xop,1);
     backface-visibility:visible;box-shadow:inset 0 0 30px rgba(0,0,0,.12);}
   .ceil{background:rgba(150,170,200,.22);border:1px solid var(--line2);opacity:var(--xop,1);}
+  /* tubería en 3D: se ve por delante de las paredes aunque estén en rayos X */
+  .tubo3d{background:var(--accent);opacity:.9;box-shadow:0 0 4px rgba(0,0,0,.35);}
   .sprite{display:flex;align-items:center;justify-content:center;font-size:22px;
     filter:drop-shadow(0 2px 3px rgba(0,0,0,.4));}
   .cable{position:absolute;left:50%;top:0;width:2px;background:rgba(0,0,0,.35);transform:translateX(-50%);}
@@ -594,8 +596,20 @@ function ghostNodes(){ const pid=pisoRef(); if(pid==null||settings.ghostPiso===f
   doc.walls.forEach(w=>{ if((w.piso||"p1")!==pid) return;
     [w.a,w.b].forEach(id=>{ if(!seen.has(id)&&doc.nodes[id]){ seen.add(id); out.push(doc.nodes[id]); } }); });
   return out; }
+// Largo REAL del tubo: el recorrido en planta más las bajadas verticales (r.vertCm),
+// que en la vista de planta no se ven pero se compran y se pagan igual.
 function routeLen(r){ let cm=0; for(let i=1;i<r.pts.length;i++)
-  cm+=Math.hypot(r.pts[i].x-r.pts[i-1].x,r.pts[i].y-r.pts[i-1].y); return cm; }
+  cm+=Math.hypot(r.pts[i].x-r.pts[i-1].x,r.pts[i].y-r.pts[i-1].y);
+  return cm+Math.max(0,+r.vertCm||0); }
+// Recorrido de tubo entre una luz del cielo y el apagador que la enciende: en planta es
+// una L (como se tiende el tubo, no en diagonal) y en alzado baja por la pared.
+function tramoLuzApagador(lz,sw){
+  const H=settings.wallH||250;
+  const hLz=HANGING.includes(lz.type)?H:alturaOf(lz);
+  const hSw=alturaOf(sw);
+  return { pts:[{x:lz.x,y:lz.y},{x:sw.x,y:lz.y},{x:sw.x,y:sw.y}],
+           vertCm:Math.max(0,H-hLz)+Math.max(0,H-hSw) };
+}
 // ---- escaleras: cálculo normativo de escalones ----
 function stairCalc(st){
   const alt=st.alturaTotal||((settings.wallH||250)+20);
@@ -636,6 +650,26 @@ function circuitCableM(c){
   let cm=0; doc.elements.filter(e=>e.circuitId===c.id && esElectrico(e)).forEach(e=>{
     cm += Math.abs(e.x-p.x)+Math.abs(e.y-p.y) + perPt + 260*Math.abs(pisoIdx(e.piso)-pfl); });
   return (cm/CM_PER_M)*(1+settings.desperdicio/100); }
+// Pares luz↔apagador del piso activo que todavía no tienen su tubo trazado.
+function paresLuzApagadorPendientes(){
+  const out=[];
+  doc.elements.forEach(sw=>{
+    if(!enPiso(sw)||!SWITCH_TYPES.includes(sw.type)||!sw.controla) return;
+    sw.controla.forEach(lid=>{
+      const lz=doc.elements.find(x=>x.id===lid); if(!lz||!enPiso(lz)) return;
+      if((doc.routes||[]).some(r=>r.auto&&r.from===lid&&r.to===sw.id)) return; // ya trazado
+      out.push({lz,sw}); });
+  });
+  return out;
+}
+// Traza el tubo de cada luz hasta su apagador. Idempotente: repetirlo no duplica.
+function trazarCableLuces(){
+  const pend=paresLuzApagadorPendientes();
+  pend.forEach(({lz,sw})=>{ const t=tramoLuzApagador(lz,sw);
+    doc.routes.push({id:uid("r"),circuitId:sw.circuitId||lz.circuitId||null,
+      pts:t.pts,vertCm:t.vertCm,auto:true,from:lz.id,to:sw.id,piso:doc.pisoActivo}); });
+  return pend.length;
+}
 function addCircuit(name,amps){ const c={id:uid("c"),name:name||("Circuito "+(doc.circuits.length+1)),
   amps:amps||20,color:CIRCUIT_COLORS[doc.circuits.length%CIRCUIT_COLORS.length],
   fase:(doc.circuits.length%2?"B":"A")};
@@ -2713,6 +2747,10 @@ function renderCircuits(p){
   html+=`<button id="verUni" class="ghost" style="width:100%;justify-content:center;margin-top:6px">📜 Ver diagrama unifilar</button>`;
   html+=`<button id="verCarg" class="ghost" style="width:100%;justify-content:center;margin-top:6px">📋 Cuadro de cargas</button>`;
   html+=`<button id="numPts" class="ghost" style="width:100%;justify-content:center;margin-top:6px">🔢 Numerar puntos (C1-1, C1-2…)</button>`;
+  const pend=paresLuzApagadorPendientes().length;
+  html+=`<div class="kdt" style="margin:14px 0 6px">🔌 Cable de las luces</div>
+    <p class="muted" style="margin:0 0 6px">Traza el tubo de cada luz hasta el apagador que la enciende: en escuadra por el cielo y bajando por la pared, como se tiende de verdad.</p>
+    <button id="autoCable" class="ghost" style="width:100%;justify-content:center;min-height:34px"${pend?"":" disabled"}>🔌 Trazar cable de luz a apagador${pend?" ("+pend+")":" — nada pendiente"}</button>`;
   const avisos=calcAvisos();
   html+=`<div class="kdt" style="margin:14px 0 6px">${avisos.length?"⚠ Avisos ("+avisos.length+")":"✔ Sin avisos"}</div>`;
   if(avisos.length) html+=`<div style="display:flex;flex-direction:column;gap:6px">`+avisos.map(a=>`<div style="font-size:12px;line-height:1.45;padding:7px 9px;border-left:3px solid var(--danger);background:var(--panel2);border-radius:0 6px 6px 0;color:var(--soft)">${a}</div>`).join("")+`</div>`;
@@ -2721,6 +2759,11 @@ function renderCircuits(p){
   if(libres.length) html+=`<p class="muted" style="margin-top:12px">⚠ <b>${libres.length}</b> punto(s) sin circuito. <button id="asigTodo" class="ghost" style="min-height:26px;padding:2px 8px">Asignar al 1º</button></p>`;
   html+=`<div class="disclaimer">Cargas de referencia: toma 180 VA · lámpara 100 VA (NEC). La verificación del 80% es una guía visual — <b>no sustituye el cálculo del profesional responsable</b>. El cable es ESTIMACIÓN (en escuadra hasta el tablero, como se tiende el tubo, + ${settings.cableXPuntoM} m por punto + ${settings.desperdicio}% desperdicio).</div>`;
   p.innerHTML=html;
+  const ac=document.getElementById("autoCable");
+  if(ac) ac.onclick=()=>{ const n=trazarCableLuces();
+    if(!n){ avisar("No hay luces vinculadas a un apagador sin tubo. Usá 🔗 en el apagador para decirle qué luz enciende."); return; }
+    pushHistory(); render();
+    avisar("🔌 "+n+" tramo"+(n===1?"":"s")+" de tubo trazado"+(n===1?"":"s")+" — deshacé con Ctrl+Z si no te sirve."); };
   document.getElementById("addCir").onclick=()=>{ addCircuit(); pushHistory(); renderPanel(); };
   document.getElementById("verUni").onclick=showUnifilar;
   document.getElementById("verCarg").onclick=showCargas;
@@ -3130,6 +3173,27 @@ function build3d(){
     if(hang){ const cable=document.createElement("div"); cable.style.cssText="position:absolute;left:50%;top:-40px;width:2px;height:40px;background:rgba(0,0,0,.4);transform:translateX(-50%)";
       sp.appendChild(cable); }
     wrap.appendChild(sp); scene.appendChild(wrap); });
+  // tubería: la corrida por el cielo y la bajada por la pared hasta el apagador
+  doc.routes.forEach(r=>{ if(!r.pts||r.pts.length<2) return;
+    const zo=zDe(r.piso);
+    const seg=(x,y,len,angDeg,alto,z)=>{ if(len<0.5) return;
+      const d=document.createElement("div"); d.className="p3 tubo3d";
+      d.style.width=len+"px"; d.style.height=(alto||2)+"px";
+      d.style.left="0"; d.style.top="0"; d.style.transformOrigin="0 0";
+      d.style.transform="translate3d("+(x-cx)+"px,"+(y-cy)+"px,"+z+"px) rotateZ("+angDeg+"deg) rotateX(90deg)";
+      scene.appendChild(d); };
+    for(let i=1;i<r.pts.length;i++){ const p0=r.pts[i-1],p1=r.pts[i];
+      const L=Math.hypot(p1.x-p0.x,p1.y-p0.y); if(L<0.5) continue;
+      seg(p0.x,p0.y,L,Math.atan2(p1.y-p0.y,p1.x-p0.x)*180/Math.PI,2,zo+H); } // corrida al ras del cielo
+    if(r.vertCm>0){ const fin=r.pts[r.pts.length-1];
+      const d=document.createElement("div"); d.className="p3 tubo3d";
+      d.style.width="2px"; d.style.height=r.vertCm+"px";
+      d.style.left="0"; d.style.top="0"; d.style.transformOrigin="0 0";
+      // con rotateX(90deg) el alto crece hacia ARRIBA: se ancla a la altura del aparato
+      // (cielo − bajada) para que suba hasta el cielo, en vez de salirse por el techo
+      d.style.transform="translate3d("+(fin.x-cx)+"px,"+(fin.y-cy)+"px,"+(zo+Math.max(0,H-r.vertCm))+"px) rotateX(90deg)";
+      scene.appendChild(d); }
+  });
 }
 // interacción 3D
 let o3=null;
