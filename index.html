@@ -874,17 +874,22 @@ function normalizeSettings(saved){ if(saved&&!saved.moneda){ settings.moneda="$"
   } }
 function doSave(){ try{
     lsSet("planelectrico:cfg",JSON.stringify({settings,xp}));
+    let cub=null;
     if(projectId){
       localStorage.setItem("planelectrico:proj:"+projectId,JSON.stringify({doc,vb,name:projectName}));
       const ix=loadIndex(); const e=ix.find(p=>p.id===projectId);
       const meta={id:projectId,nombre:projectName,updated:Date.now(),paredes:doc.walls.length,elementos:doc.elements.length};
       if(e)Object.assign(e,meta); else ix.push(meta);
       saveIndex(ix); lsSet("planelectrico:cur",projectId);
+      // Cantidades para ElectroPlan Pro: la app las lee aunque el editor esté cerrado.
+      cub=cubicacionV2(); lsSet("planelectrico:cubic:"+projectId,JSON.stringify(cub));
     }
     setSave("","Guardado");
     // Embebida en ElectroPlan Pro (iframe same-origin): avisar cubicación fresca al padre.
-    if(window.parent!==window){ try{ window.parent.postMessage(
-      {type:"pep:cubicacion",version:1,payload:bridgePayload()},location.origin); }catch(e){} } }
+    if(window.parent!==window){ try{
+      window.parent.postMessage({type:"pep:cubicacion",version:1,payload:bridgePayload()},location.origin);
+      if(cub) window.parent.postMessage({type:"pep:cubicacion2",version:2,payload:cub},location.origin);
+    }catch(e){} } }
   catch(e){ storageOK=false; setSave("err","Solo memoria"); } }
 function openProject(id,fit){ const raw=lsGet("planelectrico:proj:"+id); if(!raw) return false;
   try{ const s=JSON.parse(raw);
@@ -3819,6 +3824,35 @@ async function exportJSON(){ setSave("busy","Empacando…");
   setSave("","Guardado"); }
 // Puente hacia ElectroPlan Pro (app React): solo cubicación, sin plano.
 // La mano de obra viaja aparte (labor) — nunca como material, para no duplicar IVA en la otra app.
+// Cubicación v2 — SOLO cantidades. Los precios viven en ElectroPlan Pro.
+// Se escribe en localStorage en cada doSave() para que la app pueda leerla
+// sin tener el editor abierto.
+function cubicacionV2(){
+  const T=cotTotales();
+  const arts=[];
+  Object.keys(T.elemCount).forEach(t=>{
+    arts.push({ key:t, name:elInfo(t).name,
+      category: t==="panel"?"Tableros":"Dispositivos",
+      quantity:T.elemCount[t], unit:"c/u" });
+  });
+  if(T.cableTotal>0 && !T.cableReemplazado) arts.push({ key:"cable",
+    name:"Cable estimado por circuitos", category:"Cables",
+    quantity:+T.cableTotal.toFixed(1), unit:"m" });
+  if(T.tubM>0 && !T.tuboReemplazado) arts.push({ key:"tubo",
+    name:"Tubería conduit dibujada", category:"Conduits",
+    quantity:+T.tubM.toFixed(1), unit:"m" });
+  const TMb={cableTotal:T.cableTotal,tubM:T.tubM,puntos:T.puntos,elemCount:T.elemCount};
+  (doc.materiales||[]).forEach(m=>{ const q=cantMaterial(m,TMb); if(q<=0) return;
+    arts.push({ key:"mat:"+m.id, name:m.nombre, category:m.categoria||"Accesorios",
+      quantity:+q.toFixed(2), unit:m.unidad==="m"?"m":"c/u" }); });
+  return { format:"planelectrico-cubicacion", version:2,
+    exportedAt:new Date().toISOString(),
+    source:{ app:"PlanElectricoPro", planoId:projectId||"", proyecto:projectName||"",
+      moneda:settings.moneda, pisos:(doc.pisos||[]).length||1 },
+    articulos:arts,
+    magnitudes:{ cableM:+T.cableTotal.toFixed(2), tuboM:+T.tubM.toFixed(2), puntos:T.puntos },
+    conteo:{ paredes:doc.walls.length, elementos:doc.elements.length } };
+}
 function bridgePayload(){
   const T=cotTotales();
   const mats=[];
