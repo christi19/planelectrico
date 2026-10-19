@@ -1,5 +1,5 @@
 // PlanEléctrico Pro — service worker (cache-first, offline total)
-const C="planelectrico-v64";
+const C="planelectrico-v65";
 // Lo que la app NO puede no tener. Se guarda con addAll: si esto falla, la
 // instalacion tiene que fallar de verdad.
 const NUCLEO=["./","./index.html"];
